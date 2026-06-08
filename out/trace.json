@@ -1,0 +1,422 @@
+{
+  "case_id": "incident-01",
+  "total_steps": 31,
+  "steps": [
+    {
+      "step": 1,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "note",
+      "text": "Ingested synthetic Splunk events by sourcetype: {'access_combined': 21, 'linux_secure': 9, 'app:payments': 7, 'pan:traffic': 6}"
+    },
+    {
+      "step": 2,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "tool_call",
+      "tool": "splunk.search",
+      "args": {
+        "spl": "index=network sourcetype=pan:traffic | where bytes_out > 1000000 | stats sum(bytes_out) as out_bytes by dest_ip"
+      },
+      "result_count": 3,
+      "result_refs": [
+        "fw_traffic.jsonl:2",
+        "fw_traffic.jsonl:3",
+        "fw_traffic.jsonl:4"
+      ]
+    },
+    {
+      "step": 3,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "tool_call",
+      "tool": "splunk.search",
+      "args": {
+        "spl": "sourcetype=linux_secure action=failure | stats count by src_ip"
+      },
+      "result_count": 8,
+      "result_refs": [
+        "linux_secure.jsonl:1",
+        "linux_secure.jsonl:2",
+        "linux_secure.jsonl:3",
+        "linux_secure.jsonl:4",
+        "linux_secure.jsonl:5",
+        "linux_secure.jsonl:6",
+        "linux_secure.jsonl:7",
+        "linux_secure.jsonl:8"
+      ]
+    },
+    {
+      "step": 4,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "hypothesis",
+      "hypothesis_id": "H1",
+      "statement": "H1: The breach started with an SSH brute-force from 45.155.205.99 against bastion-01 (8 failed logons) — classic perimeter intrusion.",
+      "confidence": 0.5
+    },
+    {
+      "step": 5,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "tool_call",
+      "tool": "splunk.search",
+      "args": {
+        "spl": "sourcetype=linux_secure action=failure | stats count by src_ip"
+      },
+      "result_count": 8,
+      "result_refs": [
+        "linux_secure.jsonl:1",
+        "linux_secure.jsonl:2",
+        "linux_secure.jsonl:3",
+        "linux_secure.jsonl:4",
+        "linux_secure.jsonl:5",
+        "linux_secure.jsonl:6",
+        "linux_secure.jsonl:7",
+        "linux_secure.jsonl:8"
+      ]
+    },
+    {
+      "step": 6,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "tool_call",
+      "tool": "splunk.search",
+      "args": {
+        "spl": "sourcetype=linux_secure action=success src_ip=45.155.205.99"
+      },
+      "result_count": 0,
+      "result_refs": []
+    },
+    {
+      "step": 7,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "contradiction",
+      "hypothesis_id": "H1",
+      "reason": "zero successful SSH logons from 45.155.205.99 (all failures); threat intel rates 45.155.205.99 benign (Internet-wide SSH scanner (GreyNoise-style benign mass-scan); never authenticates)",
+      "evidence_refs": [
+        "linux_secure.jsonl:1",
+        "linux_secure.jsonl:2",
+        "threat_intel.csv:2"
+      ]
+    },
+    {
+      "step": 8,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "tool_call",
+      "tool": "splunk.search",
+      "args": {
+        "spl": "index=web sourcetype=access_combined uri_path=\"/api/login\" status=401 | stats count by clientip"
+      },
+      "result_count": 10,
+      "result_refs": [
+        "web_access.jsonl:5",
+        "web_access.jsonl:6",
+        "web_access.jsonl:7",
+        "web_access.jsonl:8",
+        "web_access.jsonl:9",
+        "web_access.jsonl:10",
+        "web_access.jsonl:11",
+        "web_access.jsonl:12",
+        "web_access.jsonl:13",
+        "web_access.jsonl:14"
+      ]
+    },
+    {
+      "step": 9,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "tool_call",
+      "tool": "splunk.search",
+      "args": {
+        "spl": "index=web sourcetype=access_combined uri_path=\"/api/login\" status=200 | table clientip,user"
+      },
+      "result_count": 1,
+      "result_refs": [
+        "web_access.jsonl:15"
+      ]
+    },
+    {
+      "step": 10,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "self_correction",
+      "from_hypothesis": "H1",
+      "to_statement": "H2: The real entry vector was web credential stuffing against /api/login from 192.0.2.50 using a repo-leaked API key, which succeeded as svc_deploy — NOT the SSH brute-force, which never authenticated.",
+      "rationale": "zero successful SSH logons from 45.155.205.99 (all failures); threat intel rates 45.155.205.99 benign (Internet-wide SSH scanner (GreyNoise-style benign mass-scan); never authenticates). Meanwhile SPL shows 10 failed /api/login from 192.0.2.50 followed by a 200 success as svc_deploy — a real, corroborated web intrusion chain."
+    },
+    {
+      "step": 11,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "hypothesis",
+      "hypothesis_id": "H2",
+      "statement": "H2: The real entry vector was web credential stuffing against /api/login from 192.0.2.50 using a repo-leaked API key, which succeeded as svc_deploy — NOT the SSH brute-force, which never authenticated.",
+      "confidence": 0.94
+    },
+    {
+      "step": 12,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "tool_call",
+      "tool": "splunk.search",
+      "args": {
+        "spl": "index=web sourcetype=access_combined uri_path=\"/api/login\" status=401 | stats count by clientip"
+      },
+      "result_count": 10,
+      "result_refs": [
+        "web_access.jsonl:5",
+        "web_access.jsonl:6",
+        "web_access.jsonl:7",
+        "web_access.jsonl:8",
+        "web_access.jsonl:9",
+        "web_access.jsonl:10",
+        "web_access.jsonl:11",
+        "web_access.jsonl:12",
+        "web_access.jsonl:13",
+        "web_access.jsonl:14"
+      ]
+    },
+    {
+      "step": 13,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "tool_call",
+      "tool": "splunk.search",
+      "args": {
+        "spl": "index=web sourcetype=access_combined uri_path=\"/api/login\" status=200 clientip=192.0.2.50 | table clientip,user,time_utc"
+      },
+      "result_count": 1,
+      "result_refs": [
+        "web_access.jsonl:15"
+      ]
+    },
+    {
+      "step": 14,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "tool_call",
+      "tool": "splunk.search",
+      "args": {
+        "spl": "index=app sourcetype=app:payments event=config_loaded | table api_key_id,msg,time_utc"
+      },
+      "result_count": 1,
+      "result_refs": [
+        "app_payments.jsonl:1"
+      ]
+    },
+    {
+      "step": 15,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "tool_call",
+      "tool": "splunk.search",
+      "args": {
+        "spl": "index=app sourcetype=app:payments event=auth_success api_key_id=AKIA-DEPLOY-7Q2 | table user,api_key_id,src_ip,time_utc"
+      },
+      "result_count": 1,
+      "result_refs": [
+        "app_payments.jsonl:2"
+      ]
+    },
+    {
+      "step": 16,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "tool_call",
+      "tool": "splunk.search",
+      "args": {
+        "spl": "index=web sourcetype=access_combined uri_path=\"/api/admin/grant_role\" status=200 | table clientip,user,time_utc"
+      },
+      "result_count": 1,
+      "result_refs": [
+        "web_access.jsonl:17"
+      ]
+    },
+    {
+      "step": 17,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "tool_call",
+      "tool": "splunk.search",
+      "args": {
+        "spl": "index=app sourcetype=app:payments event=privilege_change | table user,role,msg,time_utc"
+      },
+      "result_count": 1,
+      "result_refs": [
+        "app_payments.jsonl:3"
+      ]
+    },
+    {
+      "step": 18,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "tool_call",
+      "tool": "splunk.search",
+      "args": {
+        "spl": "index=web sourcetype=access_combined uri_path=\"/api/export/customers\" status=200 | where bytes > 1000000 | stats count as exports sum(bytes) as total_bytes by clientip"
+      },
+      "result_count": 3,
+      "result_refs": [
+        "web_access.jsonl:18",
+        "web_access.jsonl:19",
+        "web_access.jsonl:20"
+      ]
+    },
+    {
+      "step": 19,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "tool_call",
+      "tool": "splunk.search",
+      "args": {
+        "spl": "index=network sourcetype=pan:traffic dest_ip=192.0.2.50 | where bytes_out > 1000000 | stats sum(bytes_out) as exfil_bytes by dest_ip"
+      },
+      "result_count": 3,
+      "result_refs": [
+        "fw_traffic.jsonl:2",
+        "fw_traffic.jsonl:3",
+        "fw_traffic.jsonl:4"
+      ]
+    },
+    {
+      "step": 20,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "tool_call",
+      "tool": "splunk.search",
+      "args": {
+        "spl": "index=app sourcetype=app:payments level=ERROR | stats count by host"
+      },
+      "result_count": 1,
+      "result_refs": [
+        "app_payments.jsonl:3"
+      ]
+    },
+    {
+      "step": 21,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "finding",
+      "evidence_id": "CS-AUTH-001",
+      "label": "Credential stuffing against /api/login (then success)",
+      "evidence_refs": [
+        "web_access.jsonl:5",
+        "web_access.jsonl:6",
+        "web_access.jsonl:7",
+        "web_access.jsonl:8",
+        "web_access.jsonl:9",
+        "web_access.jsonl:10",
+        "web_access.jsonl:11",
+        "web_access.jsonl:12",
+        "web_access.jsonl:13",
+        "web_access.jsonl:14",
+        "web_access.jsonl:15"
+      ]
+    },
+    {
+      "step": 22,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "finding",
+      "evidence_id": "CS-CRED-002",
+      "label": "Leaked service-account API key used to authenticate",
+      "evidence_refs": [
+        "app_payments.jsonl:1",
+        "app_payments.jsonl:2"
+      ]
+    },
+    {
+      "step": 23,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "finding",
+      "evidence_id": "CS-PRIV-003",
+      "label": "Privilege escalation via /api/admin/grant_role",
+      "evidence_refs": [
+        "web_access.jsonl:17",
+        "app_payments.jsonl:3"
+      ]
+    },
+    {
+      "step": 24,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "finding",
+      "evidence_id": "CS-EXFIL-004",
+      "label": "Data exfiltration spike (bulk customer export)",
+      "evidence_refs": [
+        "web_access.jsonl:18",
+        "web_access.jsonl:19",
+        "web_access.jsonl:20",
+        "fw_traffic.jsonl:2",
+        "fw_traffic.jsonl:3",
+        "fw_traffic.jsonl:4"
+      ]
+    },
+    {
+      "step": 25,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "finding",
+      "evidence_id": "OPS-ERR-005",
+      "label": "Application ERROR-level event cascade",
+      "evidence_refs": [
+        "app_payments.jsonl:3"
+      ]
+    },
+    {
+      "step": 26,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "tool_call",
+      "tool": "splunk.search",
+      "args": {
+        "spl": "index=web clientip=192.0.2.50 | stats count by host"
+      },
+      "result_count": 16,
+      "result_refs": [
+        "web_access.jsonl:5",
+        "web_access.jsonl:6",
+        "web_access.jsonl:7",
+        "web_access.jsonl:8",
+        "web_access.jsonl:9",
+        "web_access.jsonl:10",
+        "web_access.jsonl:11",
+        "web_access.jsonl:12",
+        "web_access.jsonl:13",
+        "web_access.jsonl:14",
+        "web_access.jsonl:15",
+        "web_access.jsonl:16",
+        "web_access.jsonl:17",
+        "web_access.jsonl:18",
+        "web_access.jsonl:19",
+        "web_access.jsonl:20"
+      ]
+    },
+    {
+      "step": 27,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "tool_call",
+      "tool": "splunk.search",
+      "args": {
+        "spl": "index=app src_ip=192.0.2.50 | stats count by host"
+      },
+      "result_count": 5,
+      "result_refs": [
+        "app_payments.jsonl:2",
+        "app_payments.jsonl:3",
+        "app_payments.jsonl:4",
+        "app_payments.jsonl:5",
+        "app_payments.jsonl:6"
+      ]
+    },
+    {
+      "step": 28,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "tool_call",
+      "tool": "splunk.search",
+      "args": {
+        "spl": "index=web clientip=192.0.2.50 status=200 | dedup user | table user"
+      },
+      "result_count": 1,
+      "result_refs": [
+        "web_access.jsonl:15"
+      ]
+    },
+    {
+      "step": 29,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "note",
+      "text": "Root cause established; blast radius = {'hosts': ['app-prod-02', 'web-prod-01'], 'identities': ['svc_deploy'], 'data_assets': ['customers'], 'exfil_mb': 64.5}"
+    },
+    {
+      "step": 30,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "note",
+      "text": "Built remediation checklist from critical/high findings."
+    },
+    {
+      "step": 31,
+      "ts_wall_utc": "2026-06-08T15:07:35Z",
+      "kind": "note",
+      "text": "Accuracy vs ground truth: recall=1.0 precision=1.0 decoy_rejected=True blast_radius_hosts_correct=True"
+    }
+  ]
+}

@@ -1,0 +1,268 @@
+{
+  "schema": "splunk_copilot_evidence_ledger/1.0",
+  "case_id": "incident-01",
+  "generated_utc": "2026-06-08T15:07:35Z",
+  "synthetic": true,
+  "record_count": 10,
+  "records": [
+    {
+      "evidence_id": "SPLK-incident-01-20260610-001",
+      "case_id": "incident-01",
+      "event_time_utc": "2026-06-10T02:25:00Z",
+      "event_type": "ingestion",
+      "source": "splunk_event_store",
+      "summary": "Anomaly trigger: outbound byte spike detected on pan:traffic (1 dest_ip over 1MB). Loaded 43 events across 4 sourcetypes.",
+      "severity": "low",
+      "owner": "splunk_copilot",
+      "status": "new",
+      "notes": "SYNTHETIC DATA ONLY. Read-only event store; raw events not modified.",
+      "iocs": [],
+      "recommendation": "",
+      "evidence_pointer": "fw_traffic.jsonl:2; fw_traffic.jsonl:3; fw_traffic.jsonl:4",
+      "evidence_refs": [
+        "fw_traffic.jsonl:2",
+        "fw_traffic.jsonl:3",
+        "fw_traffic.jsonl:4"
+      ],
+      "spl": "index=network sourcetype=pan:traffic | where bytes_out > 1000000 | stats sum(bytes_out) as out_bytes by dest_ip"
+    },
+    {
+      "evidence_id": "SPLK-incident-01-20260610-002",
+      "case_id": "incident-01",
+      "event_time_utc": "2026-06-10T02:23:20Z",
+      "event_type": "triage",
+      "source": "linux_secure + threat_intel",
+      "summary": "Rejected decoy hypothesis H1 (SSH brute-force vector). No successful SSH logon from 45.155.205.99; IP rated benign.",
+      "severity": "low",
+      "owner": "splunk_copilot",
+      "status": "triaging",
+      "notes": "Self-correction: pivoted from perimeter-SSH theory to web credential-stuffing chain based on SPL evidence.",
+      "iocs": [],
+      "recommendation": "Treat the SSH scan noise as low priority; focus on web auth + exfil.",
+      "evidence_pointer": "linux_secure.jsonl:1; linux_secure.jsonl:2; threat_intel.csv:2",
+      "evidence_refs": [
+        "linux_secure.jsonl:1",
+        "linux_secure.jsonl:2",
+        "threat_intel.csv:2"
+      ],
+      "spl": "sourcetype=linux_secure action=success src_ip=45.155.205.99"
+    },
+    {
+      "evidence_id": "SPLK-incident-01-20260610-003",
+      "case_id": "incident-01",
+      "event_time_utc": "2026-06-10T02:23:20Z",
+      "event_type": "alert",
+      "source": "correlation_search:CS-AUTH-001",
+      "summary": "[T1110.004/auth_bruteforce] 10 failed /api/login attempts from 192.0.2.50 then a successful 200 as 'svc_deploy' — credential stuffing that succeeded.",
+      "severity": "high",
+      "owner": "splunk_copilot",
+      "status": "triaging",
+      "notes": "Correlation search CS-AUTH-001; MITRE T1110.004; ops_class auth_bruteforce. Synthetic data.",
+      "iocs": [
+        "192.0.2.50"
+      ],
+      "recommendation": "Lock svc_deploy, force credential rotation, enable rate-limiting + lockout on /api/login, require MFA.",
+      "evidence_pointer": "web_access.jsonl:5; web_access.jsonl:6; web_access.jsonl:7; web_access.jsonl:8; web_access.jsonl:9; web_access.jsonl:10; web_access.jsonl:11; web_access.jsonl:12; web_access.jsonl:13; web_access.jsonl:14; web_access.jsonl:15",
+      "evidence_refs": [
+        "web_access.jsonl:5",
+        "web_access.jsonl:6",
+        "web_access.jsonl:7",
+        "web_access.jsonl:8",
+        "web_access.jsonl:9",
+        "web_access.jsonl:10",
+        "web_access.jsonl:11",
+        "web_access.jsonl:12",
+        "web_access.jsonl:13",
+        "web_access.jsonl:14",
+        "web_access.jsonl:15"
+      ],
+      "spl": "index=web sourcetype=access_combined uri_path=\"/api/login\" status=200 clientip=192.0.2.50 | table clientip,user,time_utc",
+      "mitre_attack": "T1110.004",
+      "ops_class": "auth_bruteforce"
+    },
+    {
+      "evidence_id": "SPLK-incident-01-20260610-004",
+      "case_id": "incident-01",
+      "event_time_utc": "2026-06-10T02:23:20Z",
+      "event_type": "alert",
+      "source": "correlation_search:CS-CRED-002",
+      "summary": "[T1078.004/valid_account_abuse] API key AKIA-DEPLOY-7Q2 was loaded from a repo-committed config and then used to authenticate 'svc_deploy' from 192.0.2.50 — leaked-credential abuse.",
+      "severity": "critical",
+      "owner": "splunk_copilot",
+      "status": "triaging",
+      "notes": "Correlation search CS-CRED-002; MITRE T1078.004; ops_class valid_account_abuse. Synthetic data.",
+      "iocs": [
+        "AKIA-DEPLOY-7Q2",
+        "192.0.2.50"
+      ],
+      "recommendation": "Revoke/rotate API key, purge it from git history, scope the service account to least privilege, add secret scanning to CI.",
+      "evidence_pointer": "app_payments.jsonl:1; app_payments.jsonl:2",
+      "evidence_refs": [
+        "app_payments.jsonl:1",
+        "app_payments.jsonl:2"
+      ],
+      "spl": "index=app sourcetype=app:payments event=auth_success api_key_id=AKIA-DEPLOY-7Q2 | table user,api_key_id,src_ip,time_utc",
+      "mitre_attack": "T1078.004",
+      "ops_class": "valid_account_abuse"
+    },
+    {
+      "evidence_id": "SPLK-incident-01-20260610-005",
+      "case_id": "incident-01",
+      "event_time_utc": "2026-06-10T02:24:00Z",
+      "event_type": "alert",
+      "source": "correlation_search:CS-PRIV-003",
+      "summary": "[T1068/privilege_escalation] 'svc_deploy' from 192.0.2.50 called /api/admin/grant_role and was granted role 'admin' with no approver — broken access control / privilege escalation.",
+      "severity": "critical",
+      "owner": "splunk_copilot",
+      "status": "triaging",
+      "notes": "Correlation search CS-PRIV-003; MITRE T1068; ops_class privilege_escalation. Synthetic data.",
+      "iocs": [
+        "svc_deploy"
+      ],
+      "recommendation": "Revoke the granted role, gate /api/admin/* behind authz + approval workflow, audit all recent role grants.",
+      "evidence_pointer": "web_access.jsonl:17; app_payments.jsonl:3",
+      "evidence_refs": [
+        "web_access.jsonl:17",
+        "app_payments.jsonl:3"
+      ],
+      "spl": "index=web sourcetype=access_combined uri_path=\"/api/admin/grant_role\" status=200 | table clientip,user,time_utc",
+      "mitre_attack": "T1068",
+      "ops_class": "privilege_escalation"
+    },
+    {
+      "evidence_id": "SPLK-incident-01-20260610-006",
+      "case_id": "incident-01",
+      "event_time_utc": "2026-06-10T02:25:00Z",
+      "event_type": "alert",
+      "source": "correlation_search:CS-EXFIL-004",
+      "summary": "[T1567.002/data_exfiltration] 3 bulk /api/export/customers calls from 192.0.2.50 moved ~64.5 MB; firewall confirms the matching outbound byte spike to 192.0.2.50 — data exfiltration.",
+      "severity": "critical",
+      "owner": "splunk_copilot",
+      "status": "triaging",
+      "notes": "Correlation search CS-EXFIL-004; MITRE T1567.002; ops_class data_exfiltration. Synthetic data.",
+      "iocs": [
+        "192.0.2.50"
+      ],
+      "recommendation": "Block egress to the destination, revoke session, quantify exposed records for breach notification, add DLP/rate caps on bulk export.",
+      "evidence_pointer": "web_access.jsonl:18; web_access.jsonl:19; web_access.jsonl:20; fw_traffic.jsonl:2; fw_traffic.jsonl:3; fw_traffic.jsonl:4",
+      "evidence_refs": [
+        "web_access.jsonl:18",
+        "web_access.jsonl:19",
+        "web_access.jsonl:20",
+        "fw_traffic.jsonl:2",
+        "fw_traffic.jsonl:3",
+        "fw_traffic.jsonl:4"
+      ],
+      "spl": "index=web sourcetype=access_combined uri_path=\"/api/export/customers\" status=200 | where bytes > 1000000 | stats count as exports sum(bytes) as total_bytes by clientip",
+      "mitre_attack": "T1567.002",
+      "ops_class": "data_exfiltration"
+    },
+    {
+      "evidence_id": "SPLK-incident-01-20260610-007",
+      "case_id": "incident-01",
+      "event_time_utc": "2026-06-10T02:24:00Z",
+      "event_type": "alert",
+      "source": "correlation_search:OPS-ERR-005",
+      "summary": "[-/service_error_cascade] 1 ERROR-level event(s) on app-prod-02 during the incident window — service-integrity impact correlated with the intrusion.",
+      "severity": "medium",
+      "owner": "splunk_copilot",
+      "status": "triaging",
+      "notes": "Correlation search OPS-ERR-005; MITRE -; ops_class service_error_cascade. Synthetic data.",
+      "iocs": [],
+      "recommendation": "Page on-call; correlate ERRORs with the security timeline.",
+      "evidence_pointer": "app_payments.jsonl:3",
+      "evidence_refs": [
+        "app_payments.jsonl:3"
+      ],
+      "spl": "index=app sourcetype=app:payments level=ERROR | stats count by host",
+      "ops_class": "service_error_cascade"
+    },
+    {
+      "evidence_id": "SPLK-incident-01-20260610-008",
+      "case_id": "incident-01",
+      "event_time_utc": "2026-06-10T02:28:00Z",
+      "event_type": "triage",
+      "source": "agent_root_cause",
+      "summary": "ROOT CAUSE: A deploy service-account API key (AKIA-DEPLOY-7Q2) committed to a public repo enabled credential-stuffing authentication as svc_deploy, followed by self-service privilege escalation through an unguarded /api/admin/grant_role endpoint, then bulk customer-data exfiltration.",
+      "severity": "critical",
+      "owner": "splunk_copilot",
+      "status": "triaging",
+      "notes": "Blast radius (SPL-derived): hosts=['app-prod-02', 'web-prod-01'] identities=['svc_deploy'] data_assets=['customers'] exfil_mb=64.5.",
+      "iocs": [
+        "192.0.2.50",
+        "AKIA-DEPLOY-7Q2",
+        "svc_deploy"
+      ],
+      "recommendation": "",
+      "evidence_pointer": "web_access.jsonl:5; web_access.jsonl:6; web_access.jsonl:7; web_access.jsonl:8; web_access.jsonl:9; web_access.jsonl:10; web_access.jsonl:11; web_access.jsonl:12; web_access.jsonl:13; web_access.jsonl:14; web_access.jsonl:15; app_payments.jsonl:1",
+      "evidence_refs": [
+        "web_access.jsonl:5",
+        "web_access.jsonl:6",
+        "web_access.jsonl:7",
+        "web_access.jsonl:8",
+        "web_access.jsonl:9",
+        "web_access.jsonl:10",
+        "web_access.jsonl:11",
+        "web_access.jsonl:12",
+        "web_access.jsonl:13",
+        "web_access.jsonl:14",
+        "web_access.jsonl:15",
+        "app_payments.jsonl:1"
+      ]
+    },
+    {
+      "evidence_id": "SPLK-incident-01-20260610-009",
+      "case_id": "incident-01",
+      "event_time_utc": "2026-06-10T02:30:00Z",
+      "event_type": "containment",
+      "source": "agent_playbook",
+      "summary": "Remediation checklist: Disable the svc_deploy account and revoke all its active sessions/tokens. | Rotate and purge API key AKIA-DEPLOY-7Q2; remove it from git history; enable CI secret scanning. | Revoke the unauthorized admin role grant; gate /api/admin/* behind authz + approval. | Block egress to 192.0.2.50 at fw-edge-01; add DLP + rate caps on /api/export/*. | Enable lockout + MFA + rate-limiting on /api/login to stop credential stuffing. | Quantify exfiltrated customer records and start breach-notification process. | Add a saved correlation search for (login 401 burst -> 200) and (bulk export -> egress spike).",
+      "severity": "critical",
+      "owner": "splunk_copilot",
+      "status": "mitigated",
+      "notes": "Recommendation-only (no auto-execution). Operator approval required.",
+      "iocs": [
+        "192.0.2.50",
+        "AKIA-DEPLOY-7Q2",
+        "svc_deploy"
+      ],
+      "recommendation": "Disable the svc_deploy account and revoke all its active sessions/tokens. || Rotate and purge API key AKIA-DEPLOY-7Q2; remove it from git history; enable CI secret scanning. || Revoke the unauthorized admin role grant; gate /api/admin/* behind authz + approval. || Block egress to 192.0.2.50 at fw-edge-01; add DLP + rate caps on /api/export/*. || Enable lockout + MFA + rate-limiting on /api/login to stop credential stuffing. || Quantify exfiltrated customer records and start breach-notification process. || Add a saved correlation search for (login 401 burst -> 200) and (bulk export -> egress spike).",
+      "evidence_pointer": "web_access.jsonl:5; web_access.jsonl:6; web_access.jsonl:7; web_access.jsonl:8; web_access.jsonl:9; web_access.jsonl:10; web_access.jsonl:11; web_access.jsonl:12; web_access.jsonl:13; web_access.jsonl:14; web_access.jsonl:15; app_payments.jsonl:1",
+      "evidence_refs": [
+        "web_access.jsonl:5",
+        "web_access.jsonl:6",
+        "web_access.jsonl:7",
+        "web_access.jsonl:8",
+        "web_access.jsonl:9",
+        "web_access.jsonl:10",
+        "web_access.jsonl:11",
+        "web_access.jsonl:12",
+        "web_access.jsonl:13",
+        "web_access.jsonl:14",
+        "web_access.jsonl:15",
+        "app_payments.jsonl:1"
+      ]
+    },
+    {
+      "evidence_id": "SPLK-incident-01-20260610-010",
+      "case_id": "incident-01",
+      "event_time_utc": "2026-06-10T02:31:00Z",
+      "event_type": "verification",
+      "source": "ground_truth.json",
+      "summary": "Validated findings against synthetic ground truth: 4/4 techniques matched, recall=1.0, precision=1.0, decoy_rejected=True, blast_radius_hosts_correct=True.",
+      "severity": "medium",
+      "owner": "splunk_copilot",
+      "status": "verified",
+      "notes": "Accuracy self-check on synthetic case. A live deployment would replace ground_truth.json with analyst adjudication.",
+      "iocs": [],
+      "recommendation": "",
+      "evidence_pointer": "web_access.jsonl:9; app_payments.jsonl:1; web_access.jsonl:17; web_access.jsonl:18",
+      "evidence_refs": [
+        "web_access.jsonl:9",
+        "app_payments.jsonl:1",
+        "web_access.jsonl:17",
+        "web_access.jsonl:18"
+      ]
+    }
+  ]
+}

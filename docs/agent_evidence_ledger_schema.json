@@ -1,0 +1,111 @@
+{
+  "schema_version": "1.0",
+  "name": "splunk_copilot_evidence_ledger",
+  "description": "Evidence-centric ledger for agentic Splunk incident investigation. Shared asset with the find_evil DFIR agent (same provenance-chain design).",
+  "records": {
+    "type": "object",
+    "required": [
+      "evidence_id",
+      "case_id",
+      "event_time_utc",
+      "event_type",
+      "source",
+      "summary",
+      "severity",
+      "owner",
+      "status",
+      "notes"
+    ],
+    "properties": {
+      "evidence_id": {
+        "type": "string",
+        "description": "Unique record id (e.g. SPLK-incident-01-20260610-001)"
+      },
+      "case_id": {
+        "type": "string",
+        "description": "Incident / case identifier"
+      },
+      "event_time_utc": {
+        "type": "string",
+        "description": "UTC timestamp (YYYY-MM-DDTHH:MM:SSZ)"
+      },
+      "event_type": {
+        "type": "string",
+        "description": "ingestion | search | alert | triage | containment | verification"
+      },
+      "source": {
+        "type": "string",
+        "description": "Origin of the record (e.g. correlation_search:CS-EXFIL-004, splunk_event_store)"
+      },
+      "summary": {
+        "type": "string",
+        "description": "Human-readable finding summary"
+      },
+      "severity": {
+        "type": "string",
+        "enum": ["low", "medium", "high", "critical"]
+      },
+      "owner": {
+        "type": "string",
+        "description": "Responsible investigator / agent"
+      },
+      "status": {
+        "type": "string",
+        "enum": ["new", "triaging", "mitigated", "verified", "closed"]
+      },
+      "notes": {
+        "type": "string",
+        "description": "Rationale, manual-review state, constraints"
+      },
+      "spl": {
+        "type": "string",
+        "description": "The SPL search that produced this record (re-runnable in real Splunk)"
+      },
+      "iocs": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Indicators of Compromise candidates"
+      },
+      "recommendation": {
+        "type": "string",
+        "description": "Recommended remediation action(s)"
+      },
+      "mitre_attack": {
+        "type": "string",
+        "description": "MITRE ATT&CK technique id (e.g. T1110.004)"
+      },
+      "ops_class": {
+        "type": "string",
+        "description": "Ops failure class (e.g. auth_bruteforce, data_exfiltration, service_error_cascade)"
+      },
+      "evidence_pointer": {
+        "type": "string",
+        "description": "Provenance refs to source event rows (e.g. web_access.jsonl:15; fw_traffic.jsonl:2)"
+      },
+      "evidence_refs": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Full provenance chain: every cited <source_file>:<row>"
+      }
+    }
+  },
+  "example_record": {
+    "evidence_id": "SPLK-incident-01-20260610-006",
+    "case_id": "incident-01",
+    "event_time_utc": "2026-06-10T02:25:00Z",
+    "event_type": "alert",
+    "source": "correlation_search:CS-EXFIL-004",
+    "summary": "[T1567.002/data_exfiltration] 3 bulk /api/export/customers calls from 192.0.2.50 moved ~64.5 MB; firewall confirms the matching outbound byte spike.",
+    "severity": "critical",
+    "owner": "splunk_copilot",
+    "status": "triaging",
+    "notes": "Correlation search CS-EXFIL-004; MITRE T1567.002. Synthetic data.",
+    "spl": "index=web sourcetype=access_combined uri_path=\"/api/export/customers\" status=200 | where bytes > 1000000 | stats count as exports sum(bytes) as total_bytes by clientip",
+    "iocs": ["192.0.2.50"],
+    "recommendation": "Block egress to the destination; add DLP + rate caps on bulk export.",
+    "mitre_attack": "T1567.002",
+    "ops_class": "data_exfiltration",
+    "evidence_pointer": "web_access.jsonl:18; web_access.jsonl:19; web_access.jsonl:20; fw_traffic.jsonl:2",
+    "evidence_refs": ["web_access.jsonl:18", "web_access.jsonl:19", "web_access.jsonl:20", "fw_traffic.jsonl:2"]
+  }
+}

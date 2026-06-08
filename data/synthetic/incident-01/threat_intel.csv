@@ -1,0 +1,5 @@
+row,indicator,type,verdict,note
+1,192.0.2.50,ipv4,suspicious,Known credential-stuffing proxy exit node (TI feed last 24h)
+2,45.155.205.99,ipv4,benign,Internet-wide SSH scanner (GreyNoise-style benign mass-scan); never authenticates
+3,203.0.113.10,ipv4,unknown,No reputation data
+4,AKIA-DEPLOY-7Q2,api_key,leaked,Credential found in public repo commit; flagged for rotation

@@ -1,0 +1,26 @@
+{
+  "case_id": "incident-01",
+  "synthetic": true,
+  "narrative": "A deploy service-account API key (AKIA-DEPLOY-7Q2) was accidentally committed to a public repo (app_payments.jsonl:1). An attacker at 192.0.2.50 ran a credential-stuffing burst against /api/login on web-prod-01 (10 x HTTP 401), then succeeded as svc_deploy (web_access.jsonl:15). They called /api/admin/grant_role to escalate svc_deploy to admin (web_access.jsonl:17, app_payments.jsonl:3), then bulk-exported the customers table three times (web_access.jsonl:18-20), exfiltrating ~64 MB outbound through fw-edge-01 (fw_traffic.jsonl:2-4). Blast radius: web-prod-01, app-prod-02, the svc_deploy identity, and the customers dataset.",
+  "decoy": "An internet SSH scanner at 45.155.205.99 hammered bastion-01 with 8 failed root/admin logins (linux_secure.jsonl:1-8). It looks like the intrusion vector but is unrelated benign mass-scan noise: zero successful logons and the IP is rated benign in threat_intel.csv:2. A correct agent must NOT attribute the breach to SSH brute-force and must self-correct to the web credential-stuffing chain.",
+  "root_cause": "Leaked service-account API key committed to a public repo enabled credential-stuffing authentication as svc_deploy, followed by self-service privilege escalation through an unguarded /api/admin/grant_role endpoint.",
+  "expected_findings": [
+    {"id": "GT-1", "mitre": "T1110.004", "ops_class": "auth_bruteforce", "label": "Credential stuffing against /api/login (then success)", "key_evidence": ["web_access.jsonl:9", "web_access.jsonl:15"]},
+    {"id": "GT-2", "mitre": "T1078.004", "ops_class": "valid_account_abuse", "label": "Valid (leaked) cloud/service account used to authenticate", "key_evidence": ["app_payments.jsonl:1", "app_payments.jsonl:2"]},
+    {"id": "GT-3", "mitre": "T1068", "ops_class": "privilege_escalation", "label": "Privilege escalation via /api/admin/grant_role", "key_evidence": ["web_access.jsonl:17", "app_payments.jsonl:3"]},
+    {"id": "GT-4", "mitre": "T1567.002", "ops_class": "data_exfiltration", "label": "Data exfiltration spike (bulk customer export, ~64MB out)", "key_evidence": ["web_access.jsonl:18", "fw_traffic.jsonl:2"]}
+  ],
+  "expected_decoy_rejections": [
+    {"id": "GT-D1", "claim": "SSH brute-force from 45.155.205.99 against bastion-01 is the intrusion vector", "must_reject_because": "zero successful SSH logons (all linux_secure failures) and 45.155.205.99 is rated benign in threat_intel.csv:2"}
+  ],
+  "blast_radius": {
+    "hosts": ["web-prod-01", "app-prod-02"],
+    "identities": ["svc_deploy"],
+    "data_assets": ["customers"]
+  },
+  "iocs": [
+    {"indicator": "192.0.2.50", "type": "ipv4"},
+    {"indicator": "AKIA-DEPLOY-7Q2", "type": "api_key"},
+    {"indicator": "svc_deploy", "type": "account"}
+  ]
+}

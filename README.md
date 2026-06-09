@@ -1,5 +1,8 @@
 # Splunk Agentic Ops — Incident Copilot
 
+> **▶ 60-second demo video:** [https://github.com/cjw0076/splunk-agentic-ops-copilot/releases/download/demo-v1/splunk_copilot_demo.mp4](https://github.com/cjw0076/splunk-agentic-ops-copilot/releases/download/demo-v1/splunk_copilot_demo.mp4)
+
+
 - status: working synthetic MVP (demo-ready, fully offline)
 - event: Devpost hackathon — observability / security / agentic ops with Splunk
 - official_url: https://splunk.devpost.com/

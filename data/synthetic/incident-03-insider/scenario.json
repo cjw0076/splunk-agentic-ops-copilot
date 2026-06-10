@@ -1,0 +1,54 @@
+{
+  "case_id": "incident-03-insider",
+  "title": "Insider data theft: after-hours bulk export by a privileged DBA",
+  "attack_class": "insider_threat",
+  "anomaly": {
+    "trigger_time_utc": "2026-06-12T20:50:00Z",
+    "summary": "Anomaly trigger: large outbound upload to an unsanctioned personal cloud endpoint from a DBA workstation",
+    "spl": "index=network sourcetype=pan:traffic dest_ip=198.51.100.44 | where bytes_out > 1000000 | stats sum(bytes_out) as out_bytes by src_host"
+  },
+  "decoy_hypothesis": {
+    "id": "H1",
+    "confidence": 0.4,
+    "statement": "H1: The biggest data mover is account {bf_ip} ({bf_count} rows exported) — that nightly job is the data-theft culprit.",
+    "seed_spl": "index=dlp sourcetype=db:audit event=bulk_export | stats sum(record_count) as count by user | rename user as src_ip | sort -count",
+    "seed_ip_field": "src_ip",
+    "seed_count_field": "count"
+  },
+  "refutation": {
+    "success_check_spl": "index=dlp sourcetype=db:audit event=bulk_export user={bf_ip} business_hours=false approved=false",
+    "threat_lookup_indicator": "{bf_ip}",
+    "no_success_reason": "the high-volume account {bf_ip} only ran approved exports during business hours (no after-hours, unapproved export)",
+    "benign_reason": "threat intel rates {bf_ip} benign ({ti_note})"
+  },
+  "corrected_hypothesis": {
+    "id": "H2",
+    "confidence": 0.93,
+    "statement": "H2: The real data theft is privileged DBA j.kwon exporting customers, payment_methods and salaries after hours (unapproved) from a BYOD device, then uploading ~30MB to an unsanctioned personal cloud endpoint — NOT the approved nightly ETL job, despite its larger row count.",
+    "corroborating_spl": [
+      "index=dlp sourcetype=db:audit event=bulk_export business_hours=false approved=false | stats sum(record_count) as records values(table_name) as tables by user",
+      "index=network sourcetype=pan:traffic dest_ip=198.51.100.44 | stats sum(bytes_out) as out by src_host"
+    ],
+    "rationale": "SPL shows j.kwon's after-hours, unapproved exports of sensitive tables followed by an upload to a non-approved data processor — a corroborated insider-exfiltration chain that volume-alone ranking would have missed."
+  },
+  "root_cause": "A privileged DBA (j.kwon) abused legitimate database access to run after-hours, unapproved bulk exports of customers, payment_methods, and salaries from a personal BYOD device, then uploaded the data to an unsanctioned personal cloud-storage endpoint.",
+  "blast_radius": {
+    "host_queries": [
+      "index=dlp sourcetype=db:audit event=bulk_export business_hours=false approved=false | stats count by host"
+    ],
+    "identity_query": "index=dlp sourcetype=db:audit event=bulk_export business_hours=false approved=false | dedup user | table user",
+    "identity_field": "user",
+    "data_assets": ["customers", "payment_methods", "salaries"],
+    "exfil_rule_id": "INS-EXPORT-030",
+    "exfil_detail_key": "records"
+  },
+  "iocs": ["j.kwon", "198.51.100.44", "DBA-WS-03"],
+  "remediation": [
+    "Suspend j.kwon's database and SSO access pending investigation; preserve the db:audit trail.",
+    "Block egress to the unsanctioned endpoint 198.51.100.44 and revoke the DBA workstation's session.",
+    "Engage HR and legal; scope exactly which customer / payment / salary records left.",
+    "Require approval + just-in-time access for bulk exports of sensitive tables.",
+    "Add a DLP correlation search for (after-hours bulk export AND unapproved AND egress to non-approved processor).",
+    "Disallow BYOD devices from privileged database access."
+  ]
+}

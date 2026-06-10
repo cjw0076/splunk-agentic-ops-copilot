@@ -1,0 +1,5 @@
+row,indicator,type,verdict,note
+1,102.89.40.7,ipv4,malicious,Residential proxy / known account-takeover infrastructure
+2,203.0.113.200,ipv4,benign,Corporate VPN egress (US) - sanctioned
+3,203.0.113.201,ipv4,benign,Corporate VPN egress (EU/Frankfurt) - sanctioned; same VPN as US egress
+4,MailRuleSyncer,oauth_app,malicious,Unverified third-party OAuth app requesting mail.send + offline_access

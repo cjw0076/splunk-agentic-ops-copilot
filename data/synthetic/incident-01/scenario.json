@@ -1,0 +1,62 @@
+{
+  "case_id": "incident-01",
+  "title": "Web credential-stuffing -> leaked key -> privilege escalation -> exfiltration",
+  "attack_class": "external_breach",
+  "anomaly": {
+    "trigger_time_utc": "2026-06-10T02:25:00Z",
+    "summary": "Anomaly trigger: outbound byte spike detected on pan:traffic",
+    "spl": "index=network sourcetype=pan:traffic | where bytes_out > 1000000 | stats sum(bytes_out) as out_bytes by dest_ip"
+  },
+  "decoy_hypothesis": {
+    "id": "H1",
+    "confidence": 0.5,
+    "statement": "H1: The breach started with an SSH brute-force from {bf_ip} against bastion-01 ({bf_count} failed logons) — classic perimeter intrusion.",
+    "seed_spl": "sourcetype=linux_secure action=failure | stats count by src_ip | sort -count",
+    "seed_ip_field": "src_ip",
+    "seed_count_field": "count"
+  },
+  "refutation": {
+    "success_check_spl": "sourcetype=linux_secure action=success src_ip={bf_ip}",
+    "threat_lookup_indicator": "{bf_ip}",
+    "no_success_reason": "zero successful SSH logons from {bf_ip} (all failures)",
+    "benign_reason": "threat intel rates {bf_ip} benign ({ti_note})"
+  },
+  "corrected_hypothesis": {
+    "id": "H2",
+    "confidence": 0.94,
+    "statement": "H2: The real entry vector was web credential stuffing against /api/login from 192.0.2.50 using a repo-leaked API key, which succeeded as svc_deploy — NOT the SSH brute-force, which never authenticated.",
+    "corroborating_spl": [
+      "index=web sourcetype=access_combined uri_path=\"/api/login\" status=401 | stats count by clientip",
+      "index=web sourcetype=access_combined uri_path=\"/api/login\" status=200 | table clientip,user"
+    ],
+    "rationale": "SPL shows a credential-stuffing burst from 192.0.2.50 followed by a 200 success as svc_deploy — a real, corroborated web intrusion chain."
+  },
+  "root_cause": "A deploy service-account API key (AKIA-DEPLOY-7Q2) committed to a public repo enabled credential-stuffing authentication as svc_deploy, followed by self-service privilege escalation through an unguarded /api/admin/grant_role endpoint, then bulk customer-data exfiltration.",
+  "blast_radius": {
+    "host_queries": [
+      "index=web clientip=192.0.2.50 | stats count by host",
+      "index=app src_ip=192.0.2.50 | stats count by host"
+    ],
+    "identity_query": "index=web clientip=192.0.2.50 status=200 | dedup user | table user",
+    "identity_field": "user",
+    "data_assets": [
+      "customers"
+    ],
+    "exfil_rule_id": "CS-EXFIL-004",
+    "exfil_detail_key": "exfil_mb"
+  },
+  "iocs": [
+    "192.0.2.50",
+    "AKIA-DEPLOY-7Q2",
+    "svc_deploy"
+  ],
+  "remediation": [
+    "Disable the svc_deploy account and revoke all its active sessions/tokens.",
+    "Rotate and purge API key AKIA-DEPLOY-7Q2; remove it from git history; enable CI secret scanning.",
+    "Revoke the unauthorized admin role grant; gate /api/admin/* behind authz + approval.",
+    "Block egress to 192.0.2.50 at fw-edge-01; add DLP + rate caps on /api/export/*.",
+    "Enable lockout + MFA + rate-limiting on /api/login to stop credential stuffing.",
+    "Quantify exfiltrated customer records and start breach-notification process.",
+    "Add a saved correlation search for (login 401 burst -> 200) and (bulk export -> egress spike)."
+  ]
+}

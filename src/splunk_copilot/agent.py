@@ -1,14 +1,21 @@
 """The agentic ops investigation loop:
 
-  anomaly trigger -> initial hypothesis (intentionally wrong: SSH brute-force)
+  anomaly trigger -> initial hypothesis (intentionally wrong: a tempting decoy)
   -> run SPL searches to confirm/refute -> contradiction -> evidence-justified
-  self-correction (the real web credential-stuffing chain) -> correlation
-  detectors -> evidence-linked findings -> root-cause summary -> blast-radius
-  estimate -> remediation checklist -> accuracy self-check.
+  self-correction (the real attack chain) -> correlation detectors ->
+  evidence-linked findings -> root-cause summary -> blast-radius estimate ->
+  remediation checklist -> accuracy self-check.
 
 Reasoning is deterministic and rule-driven (no LLM / no network) so the demo is
 fully reproducible offline. Every step is a real SPL search recorded to the
 trace, and every finding cites the event rows the search returned.
+
+The ONE agent is scenario-agnostic: the narrative-specific parts (which decoy to
+form, what refutes it, the corrected vector, the root cause, the blast-radius
+queries, the IOCs, the remediation) all come from a per-case ``scenario.json``
+manifest. The detector library, ledger, trace, scoring, and loop are identical
+across every incident — only the data and the manifest change. This is what lets
+the same agent solve all five synthetic incidents honestly.
 """
 
 from __future__ import annotations
@@ -19,6 +26,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from . import detections
+from .backends import SearchBackend, SyntheticBackend
 from .events import EventStore
 from .ledger import EvidenceLedger
 from .spl import SplEngine
@@ -29,117 +37,135 @@ from .trace import TraceRecorder
 class InvestigationAgent:
     case_id: str
     case_dir: str
+    backend: SearchBackend | None = None
     store: EventStore = field(init=False)
     spl: SplEngine = field(init=False)
     trace: TraceRecorder = field(init=False)
     ledger: EvidenceLedger = field(init=False)
+    manifest: dict[str, Any] = field(init=False, default_factory=dict)
     detections_found: list[detections.Detection] = field(default_factory=list)
     root_cause: str = ""
     blast_radius: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.trace = TraceRecorder(self.case_id)
-        self.store = EventStore(self.case_dir)
-        self.spl = SplEngine(self.store)
+        if self.backend is None:
+            self.store = EventStore(self.case_dir)
+            self.backend = SyntheticBackend(self.store)
+        else:
+            # backend supplies its own store/engine; keep a handle for scoring
+            self.store = getattr(self.backend, "store", EventStore(self.case_dir))
+        self.spl = self.backend.engine()
         self.spl.attach_trace(self.trace)
         self.ledger = EvidenceLedger(self.case_id)
+        self.manifest = self._load_manifest()
+
+    def _load_manifest(self) -> dict[str, Any]:
+        path = os.path.join(self.case_dir, "scenario.json")
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"scenario.json missing for {self.case_id}")
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+
+    # ---- small template helper -------------------------------------------
+    def _fmt(self, text: str, ctx: dict[str, Any]) -> str:
+        out = text
+        for k, v in ctx.items():
+            out = out.replace("{" + k + "}", str(v))
+        return out
 
     # ---- phase 1: anomaly trigger / ingest --------------------------------
     def ingest(self) -> None:
-        self.store.load()
+        self.backend.load()
         by_st: dict[str, int] = {}
         for ev in self.store.events:
             by_st[ev.sourcetype] = by_st.get(ev.sourcetype, 0) + 1
         self.trace.note(f"Ingested synthetic Splunk events by sourcetype: {by_st}")
-        # Anomaly trigger: an outbound byte spike on the firewall.
-        spike = self.spl.search('index=network sourcetype=pan:traffic '
-                                '| where bytes_out > 1000000 '
-                                '| stats sum(bytes_out) as out_bytes by dest_ip')
+        an = self.manifest["anomaly"]
+        spike = self.spl.search(an["spl"])
         first = self.store.events[0] if self.store.events else None
         self.ledger.append(
-            event_time_utc="2026-06-10T02:25:00Z",
+            event_time_utc=an["trigger_time_utc"],
             event_type="ingestion", source="splunk_event_store",
-            summary=(f"Anomaly trigger: outbound byte spike detected on pan:traffic "
-                     f"({len(spike.rows)} dest_ip over 1MB). Loaded "
+            summary=(f"{an['summary']} ({len(spike.rows)} matching group(s)). Loaded "
                      f"{len(self.store.events)} events across {len(by_st)} sourcetypes."),
             severity="low", status="new",
             notes="SYNTHETIC DATA ONLY. Read-only event store; raw events not modified.",
-            spl='index=network sourcetype=pan:traffic | where bytes_out > 1000000 '
-                '| stats sum(bytes_out) as out_bytes by dest_ip',
-            evidence_refs=spike.refs or ([first.ref] if first else ["fw_traffic.jsonl:1"]),
+            spl=an["spl"],
+            evidence_refs=spike.refs or ([first.ref] if first else ["synthetic:1"]),
         )
 
     # ---- phase 2: first (intentionally shallow) hypothesis ----------------
-    def initial_hypothesis(self) -> str:
-        """Tempting-but-wrong first read: 'SSH brute-force on the bastion got in'."""
-        hid = "H1"
-        fails = self.spl.search('sourcetype=linux_secure action=failure '
-                                '| stats count by src_ip')
-        ip = fails.rows[0].get("src_ip") if fails.rows else "?"
-        n = fails.rows[0].get("count") if fails.rows else 0
-        stmt = (f"H1: The breach started with an SSH brute-force from {ip} against "
-                f"bastion-01 ({n} failed logons) — classic perimeter intrusion.")
-        self.trace.hypothesis(hid, stmt, confidence=0.5)
-        return hid
+    def initial_hypothesis(self) -> tuple[str, dict[str, Any]]:
+        dh = self.manifest["decoy_hypothesis"]
+        seed = self.spl.search(dh["seed_spl"])
+        ctx: dict[str, Any] = {}
+        if seed.rows:
+            ctx["bf_ip"] = seed.rows[0].get(dh.get("seed_ip_field", "src_ip"))
+            ctx["bf_count"] = seed.rows[0].get(dh.get("seed_count_field", "count"))
+        stmt = self._fmt(dh["statement"], ctx)
+        self.trace.hypothesis(dh["id"], stmt, confidence=dh.get("confidence", 0.5))
+        return dh["id"], ctx
 
     # ---- phase 3: test H1, find contradiction, self-correct ---------------
-    def self_correct(self, from_hid: str) -> str:
-        # Refute H1: was there ANY successful SSH logon from the brute-force IP?
-        fails = self.spl.search('sourcetype=linux_secure action=failure '
-                                '| stats count by src_ip')
-        bf_ip = fails.rows[0].get("src_ip") if fails.rows else None
-        succ = self.spl.search(f'sourcetype=linux_secure action=success src_ip={bf_ip}')
-        ti = self.store.threat_verdict(bf_ip) if bf_ip else None
-        ti_ref = None
-        for r in self.store.lookups.get("threat_intel.csv", []):
-            if r.get("indicator") == bf_ip:
-                ti_ref = f"threat_intel.csv:{r.get('row')}"
-        contradiction_refs = fails.refs[:2]
-        if ti_ref:
-            contradiction_refs.append(ti_ref)
+    def self_correct(self, from_hid: str, ctx: dict[str, Any]) -> str:
+        ref = self.manifest["refutation"]
+        bf_ip = ctx.get("bf_ip")
+        reasons: list[str] = []
+        contradiction_refs: list[str] = []
 
-        reasons = []
-        if not succ.rows:
-            reasons.append(f"zero successful SSH logons from {bf_ip} (all failures)")
-        if ti and ti.get("verdict") == "benign":
-            reasons.append(f"threat intel rates {bf_ip} benign ({ti.get('note')})")
-        reason = "; ".join(reasons) or "no corroborating successful access from that IP"
+        # (a) does the decoy actor ever actually succeed?
+        if ref.get("success_check_spl"):
+            succ = self.spl.search(self._fmt(ref["success_check_spl"], ctx))
+            if not succ.rows:
+                reasons.append(self._fmt(ref.get("no_success_reason",
+                               "no corroborating successful access"), ctx))
+            contradiction_refs.extend(succ.refs)
+
+        # (b) what does threat intel say about the decoy indicator?
+        ti_note = ""
+        if ref.get("threat_lookup_indicator"):
+            ind = self._fmt(ref["threat_lookup_indicator"], ctx)
+            ti = self.store.threat_verdict(ind)
+            if ti:
+                ti_note = ti.get("note", "")
+                ctx["ti_note"] = ti_note
+                if ti.get("verdict") == "benign":
+                    reasons.append(self._fmt(ref.get("benign_reason",
+                                   "threat intel rates {bf_ip} benign"), ctx))
+                for r in self.store.lookups.get("threat_intel.csv", []):
+                    if r.get("indicator") == ind:
+                        contradiction_refs.append(f"threat_intel.csv:{r.get('row')}")
+
+        reason = "; ".join(reasons) or "no corroborating evidence for the decoy vector"
+        # cap contradiction refs but keep at least one
+        contradiction_refs = list(dict.fromkeys(contradiction_refs))[:4] or \
+            ([self.store.events[0].ref] if self.store.events else ["synthetic:1"])
         self.trace.contradiction(from_hid, reason, contradiction_refs)
 
-        # Confirm the real vector: credential stuffing on the web /api/login.
-        stuff = self.spl.search('index=web sourcetype=access_combined '
-                                'uri_path="/api/login" status=401 | stats count by clientip')
-        win = self.spl.search('index=web sourcetype=access_combined '
-                              'uri_path="/api/login" status=200 | table clientip,user')
-        corrected = (
-            "H2: The real entry vector was web credential stuffing against "
-            "/api/login from 192.0.2.50 using a repo-leaked API key, which "
-            "succeeded as svc_deploy — NOT the SSH brute-force, which never "
-            "authenticated."
-        )
+        # confirm the real vector
+        ch = self.manifest["corrected_hypothesis"]
+        corr_refs: list[str] = []
+        for q in ch.get("corroborating_spl", []):
+            corr_refs.extend(self.spl.search(self._fmt(q, ctx)).refs)
+        corrected = self._fmt(ch["statement"], ctx)
         self.trace.self_correction(
             from_hid=from_hid, to_statement=corrected,
-            rationale=(f"{reason}. Meanwhile SPL shows "
-                       f"{stuff.rows[0].get('count') if stuff.rows else '?'} failed "
-                       f"/api/login from {stuff.rows[0].get('clientip') if stuff.rows else '?'} "
-                       f"followed by a 200 success as "
-                       f"{win.rows[0].get('user') if win.rows else '?'} — a real, "
-                       f"corroborated web intrusion chain."),
+            rationale=f"{reason}. {self._fmt(ch.get('rationale', ''), ctx)}",
         )
-        self.trace.hypothesis("H2", corrected, confidence=0.94)
+        self.trace.hypothesis(ch["id"], corrected, confidence=ch.get("confidence", 0.9))
         self.ledger.append(
-            event_time_utc="2026-06-10T02:23:20Z",
-            event_type="triage", source="linux_secure + threat_intel",
-            summary=("Rejected decoy hypothesis H1 (SSH brute-force vector). No "
-                     "successful SSH logon from 45.155.205.99; IP rated benign."),
+            event_time_utc=self.manifest["anomaly"]["trigger_time_utc"],
+            event_type="triage", source="self_correction",
+            summary=(f"Rejected decoy hypothesis {from_hid}. {reason}."),
             severity="low", status="triaging",
-            notes="Self-correction: pivoted from perimeter-SSH theory to web "
-                  "credential-stuffing chain based on SPL evidence.",
-            spl=f'sourcetype=linux_secure action=success src_ip={bf_ip}',
+            notes=f"Self-correction: pivoted from the decoy theory to the "
+                  f"corroborated attack chain based on SPL evidence.",
+            spl=self._fmt(ref.get("success_check_spl", ""), ctx) or None,
             evidence_refs=contradiction_refs,
-            recommendation="Treat the SSH scan noise as low priority; focus on web auth + exfil.",
+            recommendation="De-prioritise the decoy; focus on the corroborated chain.",
         )
-        return "H2"
+        return ch["id"]
 
     # ---- phase 4: run correlation detectors, promote to findings ----------
     def investigate(self) -> None:
@@ -148,7 +174,7 @@ class InvestigationAgent:
         for d in dets:
             self.trace.finding(d.rule_id, d.label, d.evidence_refs)
             self.ledger.append(
-                event_time_utc=d.event_time_utc,
+                event_time_utc=d.event_time_utc or self.manifest["anomaly"]["trigger_time_utc"],
                 event_type="alert", source=f"correlation_search:{d.rule_id}",
                 summary=f"[{d.mitre}/{d.ops_class}] {d.summary}",
                 severity=d.severity, status="triaging",
@@ -161,33 +187,30 @@ class InvestigationAgent:
 
     # ---- phase 5: root cause + blast radius -------------------------------
     def assess(self) -> None:
-        self.root_cause = (
-            "A deploy service-account API key (AKIA-DEPLOY-7Q2) committed to a "
-            "public repo enabled credential-stuffing authentication as svc_deploy, "
-            "followed by self-service privilege escalation through an unguarded "
-            "/api/admin/grant_role endpoint, then bulk customer-data exfiltration."
-        )
-        # Blast radius derived from SPL, not hardcoded guesses. Find every host
-        # the attacker IP 192.0.2.50 touched, across the web and app tiers.
+        self.root_cause = self.manifest["root_cause"]
+        br = self.manifest.get("blast_radius", {})
         host_set: set[str] = set()
-        web_hosts = self.spl.search('index=web clientip=192.0.2.50 | stats count by host')
-        app_hosts = self.spl.search('index=app src_ip=192.0.2.50 | stats count by host')
-        for res in (web_hosts, app_hosts):
-            for r in res.rows:
+        for q in br.get("host_queries", []):
+            for r in self.spl.search(q).rows:
                 if r.get("host"):
                     host_set.add(r["host"])
-        host_list = sorted(host_set)
-        ids = self.spl.search('index=web clientip=192.0.2.50 status=200 '
-                              '| dedup user | table user')
-        identities = sorted({r.get("user") for r in ids.rows
-                             if r.get("user") and r.get("user") != "-"})
+        identities: list[str] = []
+        if br.get("identity_query"):
+            idf = br.get("identity_field", "user")
+            for r in self.spl.search(br["identity_query"]).rows:
+                v = r.get(idf)
+                if v and v != "-" and v not in identities:
+                    identities.append(v)
+        exfil = None
+        if br.get("exfil_rule_id"):
+            exfil = next((d.detail.get(br.get("exfil_detail_key", "exfil_mb"))
+                          for d in self.detections_found
+                          if d.rule_id == br["exfil_rule_id"]), None)
         self.blast_radius = {
-            "hosts": sorted(host_list),
-            "identities": identities,
-            "data_assets": ["customers"],
-            "exfil_mb": next((d.detail.get("exfil_mb")
-                              for d in self.detections_found
-                              if d.rule_id == "CS-EXFIL-004"), None),
+            "hosts": sorted(host_set),
+            "identities": sorted(identities),
+            "data_assets": br.get("data_assets", []),
+            "exfil_mb": exfil,
         }
         self.trace.note(f"Root cause established; blast radius = {self.blast_radius}")
         refs: list[str] = []
@@ -195,7 +218,7 @@ class InvestigationAgent:
             refs.extend(d.evidence_refs)
         refs = list(dict.fromkeys(refs))
         self.ledger.append(
-            event_time_utc="2026-06-10T02:28:00Z",
+            event_time_utc=self.manifest["anomaly"]["trigger_time_utc"],
             event_type="triage", source="agent_root_cause",
             summary="ROOT CAUSE: " + self.root_cause,
             severity="critical", status="triaging",
@@ -203,8 +226,9 @@ class InvestigationAgent:
                   f"identities={self.blast_radius['identities']} "
                   f"data_assets={self.blast_radius['data_assets']} "
                   f"exfil_mb={self.blast_radius['exfil_mb']}.",
-            evidence_refs=refs[:12] or ["web_access.jsonl:15"],
-            iocs=["192.0.2.50", "AKIA-DEPLOY-7Q2", "svc_deploy"],
+            evidence_refs=refs[:12] or ([self.store.events[0].ref]
+                                        if self.store.events else ["synthetic:1"]),
+            iocs=self.manifest.get("iocs", []),
         )
 
     # ---- phase 6: remediation checklist -----------------------------------
@@ -216,24 +240,17 @@ class InvestigationAgent:
                 all_refs.extend(d.evidence_refs)
                 all_iocs.extend(d.iocs)
         all_refs = list(dict.fromkeys(all_refs))
-        all_iocs = list(dict.fromkeys(all_iocs))
-        actions = [
-            "Disable the svc_deploy account and revoke all its active sessions/tokens.",
-            "Rotate and purge API key AKIA-DEPLOY-7Q2; remove it from git history; enable CI secret scanning.",
-            "Revoke the unauthorized admin role grant; gate /api/admin/* behind authz + approval.",
-            "Block egress to 192.0.2.50 at fw-edge-01; add DLP + rate caps on /api/export/*.",
-            "Enable lockout + MFA + rate-limiting on /api/login to stop credential stuffing.",
-            "Quantify exfiltrated customer records and start breach-notification process.",
-            "Add a saved correlation search for (login 401 burst -> 200) and (bulk export -> egress spike).",
-        ]
+        all_iocs = list(dict.fromkeys(all_iocs + self.manifest.get("iocs", [])))
+        actions = self.manifest.get("remediation", [])
         self.trace.note("Built remediation checklist from critical/high findings.")
         self.ledger.append(
-            event_time_utc="2026-06-10T02:30:00Z",
+            event_time_utc=self.manifest["anomaly"]["trigger_time_utc"],
             event_type="containment", source="agent_playbook",
             summary="Remediation checklist: " + " | ".join(actions),
             severity="critical", status="mitigated",
             notes="Recommendation-only (no auto-execution). Operator approval required.",
-            evidence_refs=all_refs[:12] or ["web_access.jsonl:15"],
+            evidence_refs=all_refs[:12] or ([self.store.events[0].ref]
+                                            if self.store.events else ["synthetic:1"]),
             iocs=all_iocs,
             recommendation=" || ".join(actions),
         )
@@ -254,11 +271,9 @@ class InvestigationAgent:
         rejected_decoy = any(s["kind"] == "self_correction" for s in self.trace.steps)
         recall = len(matched) / len(expected) if expected else 0.0
         gt_mitre = {e["mitre"] for e in expected}
-        # precision: detections that map to a real GT technique (ops-only rules excluded)
         mitre_dets = [d for d in self.detections_found if d.mitre != "-"]
         true_pos = [d for d in mitre_dets if d.mitre in gt_mitre]
         precision = len(true_pos) / len(mitre_dets) if mitre_dets else 0.0
-        # blast-radius accuracy
         gt_br = gt.get("blast_radius", {})
         br_hosts_ok = set(gt_br.get("hosts", [])) == set(self.blast_radius.get("hosts", []))
         br_ids_ok = set(gt_br.get("identities", [])) == set(self.blast_radius.get("identities", []))
@@ -281,7 +296,7 @@ class InvestigationAgent:
         for e in matched:
             verify_refs.extend(e.get("key_evidence", [])[:1])
         self.ledger.append(
-            event_time_utc="2026-06-10T02:31:00Z",
+            event_time_utc=self.manifest["anomaly"]["trigger_time_utc"],
             event_type="verification", source="ground_truth.json",
             summary=(f"Validated findings against synthetic ground truth: "
                      f"{len(matched)}/{len(expected)} techniques matched, "
@@ -291,21 +306,23 @@ class InvestigationAgent:
             severity="medium", status="verified",
             notes="Accuracy self-check on synthetic case. A live deployment would "
                   "replace ground_truth.json with analyst adjudication.",
-            evidence_refs=verify_refs or ["web_access.jsonl:15"],
+            evidence_refs=verify_refs or ([self.store.events[0].ref]
+                                          if self.store.events else ["synthetic:1"]),
         )
         return result
 
     # ---- orchestration ----------------------------------------------------
     def run(self) -> dict[str, Any]:
         self.ingest()
-        h1 = self.initial_hypothesis()
-        h2 = self.self_correct(h1)
+        h1, ctx = self.initial_hypothesis()
+        h2 = self.self_correct(h1, ctx)
         self.investigate()
         self.assess()
         self.remediate()
         accuracy = self.verify()
         return {
             "case_id": self.case_id,
+            "title": self.manifest.get("title", self.case_id),
             "final_hypothesis": h2,
             "detections": len(self.detections_found),
             "root_cause": self.root_cause,

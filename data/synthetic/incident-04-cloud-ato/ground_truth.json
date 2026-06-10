@@ -1,0 +1,24 @@
+{
+  "case_id": "incident-04-cloud-ato",
+  "synthetic": true,
+  "narrative": "An attacker on a malicious residential proxy in Lagos (102.89.40.7) push-bombed d.okafor with six denied MFA challenges (okta_auth.jsonl:2-7) until a push was accepted, producing a successful SSO login from NG just minutes after a legitimate US login (okta_auth.jsonl:1,8) — impossible travel. The attacker then consented a malicious OAuth app, MailRuleSyncer, with mail.read/mail.send/offline_access scopes for token persistence (okta_system.jsonl:1), created an inbox rule to hide invoice replies (okta_system.jsonl:2), and pulled a finance board deck (web_access.jsonl:1). Blast radius: the d.okafor identity, its mailbox, and finance documents.",
+  "decoy": "User s.muller appears to log in from the US and then Frankfurt within minutes (okta_auth.jsonl:9-10), which looks like impossible travel. But both egress IPs (203.0.113.200, 203.0.113.201) are sanctioned corporate VPN egress nodes rated benign in threat_intel.csv:2-3 — the same VPN simply has US and EU egress. A correct agent must NOT flag s.muller as a takeover and must self-correct to d.okafor, whose source IP is malicious-rated.",
+  "root_cause": "MFA push-fatigue from a malicious proxy took over d.okafor's SSO account, followed by a malicious OAuth consent grant for persistence.",
+  "expected_findings": [
+    {"id": "GT-1", "mitre": "T1078", "ops_class": "account_takeover", "label": "Impossible travel: one identity, multiple countries", "key_evidence": ["okta_auth.jsonl:1", "okta_auth.jsonl:8"]},
+    {"id": "GT-2", "mitre": "T1098.001", "ops_class": "persistence_oauth", "label": "Malicious OAuth app consent grant (persistence)", "key_evidence": ["okta_system.jsonl:1"]}
+  ],
+  "expected_decoy_rejections": [
+    {"id": "GT-D1", "claim": "s.muller's US->Frankfurt logins are an impossible-travel account takeover", "must_reject_because": "both source IPs are sanctioned corporate VPN egress rated benign (threat_intel.csv:2-3); it is the same VPN's US and EU egress, not travel"}
+  ],
+  "blast_radius": {
+    "hosts": [],
+    "identities": ["d.okafor"],
+    "data_assets": ["mailbox", "finance_documents"]
+  },
+  "iocs": [
+    {"indicator": "102.89.40.7", "type": "ipv4"},
+    {"indicator": "MailRuleSyncer", "type": "oauth_app"},
+    {"indicator": "d.okafor", "type": "account"}
+  ]
+}

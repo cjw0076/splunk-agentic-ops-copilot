@@ -14,6 +14,15 @@ export PYTHONPATH="$HERE/src${PYTHONPATH:+:$PYTHONPATH}"
 python3 -m splunk_copilot --case-dir "$CASE_DIR" --out "$OUT_DIR"
 
 echo
+echo "List all 5 synthetic scenarios with:"
+echo "  PYTHONPATH=$HERE/src python3 -m splunk_copilot --list"
+echo
+echo "Benchmark the agent across ALL scenarios with:"
+echo "  PYTHONPATH=$HERE/src python3 eval/run_eval.py"
+echo
+echo "Launch the live web dashboard with:"
+echo "  pip install -r webapp/requirements.txt && ./run_dashboard.sh"
+echo
 echo "Replay the recorded reasoning + SPL trace with:"
 echo "  PYTHONPATH=$HERE/src python3 -m splunk_copilot --replay $OUT_DIR/trace.json"
 echo

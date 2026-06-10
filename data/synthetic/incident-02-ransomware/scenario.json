@@ -1,0 +1,54 @@
+{
+  "case_id": "incident-02-ransomware",
+  "title": "Ransomware: shadow-copy deletion -> mass encryption -> C2",
+  "attack_class": "ransomware",
+  "anomaly": {
+    "trigger_time_utc": "2026-06-12T14:02:30Z",
+    "summary": "Anomaly trigger: burst of file-modify events rewriting documents to a .locky extension on FIN-WS-07",
+    "spl": "index=endpoint sourcetype=xmlwineventlog:sysmon event=file_modified | where like(target_filename,\"%.locky\") | stats count by host"
+  },
+  "decoy_hypothesis": {
+    "id": "H1",
+    "confidence": 0.45,
+    "statement": "H1: The threat is the malware flagged on {bf_ip} — an antivirus hit on eicar.com — so the IT lab host is patient zero.",
+    "seed_spl": "index=endpoint sourcetype=xmlwineventlog:sysmon | where like(target_filename,\"%eicar%\") | stats count by target_filename | rename target_filename as src_ip",
+    "seed_ip_field": "src_ip",
+    "seed_count_field": "count"
+  },
+  "refutation": {
+    "success_check_spl": "index=endpoint sourcetype=xmlwineventlog:sysmon host=IT-LAB-02 | where like(target_filename,\"%.locky\")",
+    "threat_lookup_indicator": "{bf_ip}",
+    "no_success_reason": "the eicar.com host shows zero encryption or shadow-copy deletion activity",
+    "benign_reason": "threat intel rates {bf_ip} benign ({ti_note})"
+  },
+  "corrected_hypothesis": {
+    "id": "H2",
+    "confidence": 0.95,
+    "statement": "H2: The real incident is ransomware on FIN-WS-07: a macro-spawned PowerShell deleted volume shadow copies (vssadmin/wbadmin/bcdedit), then svch0st.exe encrypted 8 documents to .locky and dropped READ_ME_TO_DECRYPT.txt, while beaconing to a known Locky C2 — the EICAR hit is unrelated test noise.",
+    "corroborating_spl": [
+      "index=endpoint sourcetype=xmlwineventlog:sysmon event=process_create | where like(command_line,\"%vssadmin%\") OR like(command_line,\"%delete shadows%\") OR like(command_line,\"%wbadmin%\") | table host,command_line",
+      "index=endpoint sourcetype=xmlwineventlog:sysmon event=file_modified | where like(target_filename,\"%.locky\") | stats count by host"
+    ],
+    "rationale": "SPL shows recovery inhibition followed by a mass-encryption burst and a ransom note on FIN-WS-07 — a corroborated ransomware chain."
+  },
+  "root_cause": "A malicious macro in Invoice_April.docm spawned an encoded PowerShell stager on FIN-WS-07; it inhibited recovery by deleting volume shadow copies and backup catalogs, then ran svch0st.exe to encrypt user documents to .locky and beacon to a Locky C2 at 203.0.113.77.",
+  "blast_radius": {
+    "host_queries": [
+      "index=endpoint sourcetype=xmlwineventlog:sysmon event=file_modified | where like(target_filename,\"%.locky\") | stats count by host"
+    ],
+    "identity_query": "index=endpoint sourcetype=xmlwineventlog:sysmon | where like(target_filename,\"%.locky\") | dedup user | table user",
+    "identity_field": "user",
+    "data_assets": ["finance_documents"],
+    "exfil_rule_id": "RW-ENCRYPT-021",
+    "exfil_detail_key": "encrypted_files"
+  },
+  "iocs": ["203.0.113.77", "svch0st.exe", "READ_ME_TO_DECRYPT.txt"],
+  "remediation": [
+    "Network-isolate FIN-WS-07 immediately while preserving volatile memory for forensics.",
+    "Block egress to the Locky C2 203.0.113.77 at the edge firewall.",
+    "Verify and restore the finance documents from offsite/immutable backups (local shadow copies are gone).",
+    "Hunt for svch0st.exe and the encoded PowerShell stager across all endpoints.",
+    "Reset credentials used on FIN-WS-07 and disable Office macros from the internet via GPO.",
+    "Add correlation searches for (vssadmin/wbadmin delete) and (mass rename to known ransom extensions)."
+  ]
+}

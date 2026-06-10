@@ -1,0 +1,2 @@
+{"row": 1, "index": "app", "sourcetype": "app:payments", "host": "fileserver-01", "_time": 1749736960, "time_utc": "2025-06-12T14:02:40Z", "level": "ERROR", "event": "share_unavailable", "user": "system", "msg": "SMB share \\\\fileserver-01\\finance returned STATUS_FILE_CORRUPT for 8 files"}
+{"row": 2, "index": "app", "sourcetype": "app:payments", "host": "fileserver-01", "_time": 1749736970, "time_utc": "2025-06-12T14:02:50Z", "level": "ERROR", "event": "backup_failed", "user": "system", "msg": "Nightly VSS snapshot missing; backup job aborted"}

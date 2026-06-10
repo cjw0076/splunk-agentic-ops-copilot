@@ -14,6 +14,7 @@ import os
 import sys
 
 from .agent import InvestigationAgent
+from .backends import make_backend
 from .events import EventStore
 from .spl import REF_KEY, SplEngine
 
@@ -46,7 +47,11 @@ def run_demo(case_dir: str, out_dir: str) -> int:
     print(c("dim", "SYNTHETIC DATA ONLY — no live Splunk, no real systems, no secrets."))
     print(c("dim", f"Case: {case_id}   Event dir: {case_dir}"))
 
-    agent = InvestigationAgent(case_id=case_id, case_dir=case_dir)
+    backend = make_backend(case_dir)
+    bname = type(backend).__name__
+    if bname != "SyntheticBackend":
+        print(c("warn", f"Backend: {bname} (live Splunk via REST)"))
+    agent = InvestigationAgent(case_id=case_id, case_dir=case_dir, backend=backend)
     summary = agent.run()
 
     _rule("REASONING (hypothesis -> contradiction -> self-correction)")
@@ -132,6 +137,23 @@ def run_demo(case_dir: str, out_dir: str) -> int:
     return 0
 
 
+def list_scenarios(data_dir: str = "data/synthetic") -> int:
+    print(c("h", "Available synthetic scenarios:"))
+    if not os.path.isdir(data_dir):
+        print(c("bad", f"  no data dir at {data_dir}"))
+        return 1
+    for name in sorted(os.listdir(data_dir)):
+        manifest = os.path.join(data_dir, name, "scenario.json")
+        if not os.path.exists(manifest):
+            continue
+        with open(manifest, encoding="utf-8") as fh:
+            m = json.load(fh)
+        print(f"  {c('ok', name):<40} {m.get('title','')}")
+        print(c("dim", f"    class={m.get('attack_class','-')}  "
+                       f"--case-dir {os.path.join(data_dir, name)}"))
+    return 0
+
+
 def replay(trace_path: str) -> int:
     with open(trace_path, encoding="utf-8") as fh:
         tr = json.load(fh)
@@ -184,7 +206,11 @@ def main(argv: list[str] | None = None) -> int:
                    help="replay a previously recorded trace.json and exit")
     p.add_argument("--spl", metavar="QUERY",
                    help="run one ad-hoc SPL query against the case and exit")
+    p.add_argument("--list", action="store_true",
+                   help="list available synthetic scenarios and exit")
     args = p.parse_args(argv)
+    if args.list:
+        return list_scenarios()
     if args.replay:
         return replay(args.replay)
     if args.spl:

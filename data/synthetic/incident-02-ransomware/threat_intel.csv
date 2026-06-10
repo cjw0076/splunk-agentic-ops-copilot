@@ -1,0 +1,4 @@
+row,indicator,type,verdict,note
+1,203.0.113.77,ipv4,malicious,Known Locky ransomware C2 / payment portal (TI feed)
+2,eicar.com,filename,benign,Standard EICAR antivirus test file; not malware
+3,svch0st.exe,filename,malicious,Masquerading binary (note the zero) used by the encryptor

@@ -1,7 +1,7 @@
 {
   "schema": "splunk_copilot_evidence_ledger/1.0",
   "case_id": "incident-01",
-  "generated_utc": "2026-06-08T15:07:35Z",
+  "generated_utc": "2026-06-10T01:10:24Z",
   "synthetic": true,
   "record_count": 10,
   "records": [
@@ -11,7 +11,7 @@
       "event_time_utc": "2026-06-10T02:25:00Z",
       "event_type": "ingestion",
       "source": "splunk_event_store",
-      "summary": "Anomaly trigger: outbound byte spike detected on pan:traffic (1 dest_ip over 1MB). Loaded 43 events across 4 sourcetypes.",
+      "summary": "Anomaly trigger: outbound byte spike detected on pan:traffic (1 matching group(s)). Loaded 43 events across 4 sourcetypes.",
       "severity": "low",
       "owner": "splunk_copilot",
       "status": "new",
@@ -29,20 +29,18 @@
     {
       "evidence_id": "SPLK-incident-01-20260610-002",
       "case_id": "incident-01",
-      "event_time_utc": "2026-06-10T02:23:20Z",
+      "event_time_utc": "2026-06-10T02:25:00Z",
       "event_type": "triage",
-      "source": "linux_secure + threat_intel",
-      "summary": "Rejected decoy hypothesis H1 (SSH brute-force vector). No successful SSH logon from 45.155.205.99; IP rated benign.",
+      "source": "self_correction",
+      "summary": "Rejected decoy hypothesis H1. zero successful SSH logons from 45.155.205.99 (all failures); threat intel rates 45.155.205.99 benign (Internet-wide SSH scanner (GreyNoise-style benign mass-scan); never authenticates).",
       "severity": "low",
       "owner": "splunk_copilot",
       "status": "triaging",
-      "notes": "Self-correction: pivoted from perimeter-SSH theory to web credential-stuffing chain based on SPL evidence.",
+      "notes": "Self-correction: pivoted from the decoy theory to the corroborated attack chain based on SPL evidence.",
       "iocs": [],
-      "recommendation": "Treat the SSH scan noise as low priority; focus on web auth + exfil.",
-      "evidence_pointer": "linux_secure.jsonl:1; linux_secure.jsonl:2; threat_intel.csv:2",
+      "recommendation": "De-prioritise the decoy; focus on the corroborated chain.",
+      "evidence_pointer": "threat_intel.csv:2",
       "evidence_refs": [
-        "linux_secure.jsonl:1",
-        "linux_secure.jsonl:2",
         "threat_intel.csv:2"
       ],
       "spl": "sourcetype=linux_secure action=success src_ip=45.155.205.99"
@@ -61,7 +59,7 @@
       "iocs": [
         "192.0.2.50"
       ],
-      "recommendation": "Lock svc_deploy, force credential rotation, enable rate-limiting + lockout on /api/login, require MFA.",
+      "recommendation": "Lock the compromised account, force credential rotation, enable rate-limiting + lockout on /api/login, require MFA.",
       "evidence_pointer": "web_access.jsonl:5; web_access.jsonl:6; web_access.jsonl:7; web_access.jsonl:8; web_access.jsonl:9; web_access.jsonl:10; web_access.jsonl:11; web_access.jsonl:12; web_access.jsonl:13; web_access.jsonl:14; web_access.jsonl:15",
       "evidence_refs": [
         "web_access.jsonl:5",
@@ -180,7 +178,7 @@
     {
       "evidence_id": "SPLK-incident-01-20260610-008",
       "case_id": "incident-01",
-      "event_time_utc": "2026-06-10T02:28:00Z",
+      "event_time_utc": "2026-06-10T02:25:00Z",
       "event_type": "triage",
       "source": "agent_root_cause",
       "summary": "ROOT CAUSE: A deploy service-account API key (AKIA-DEPLOY-7Q2) committed to a public repo enabled credential-stuffing authentication as svc_deploy, followed by self-service privilege escalation through an unguarded /api/admin/grant_role endpoint, then bulk customer-data exfiltration.",
@@ -213,7 +211,7 @@
     {
       "evidence_id": "SPLK-incident-01-20260610-009",
       "case_id": "incident-01",
-      "event_time_utc": "2026-06-10T02:30:00Z",
+      "event_time_utc": "2026-06-10T02:25:00Z",
       "event_type": "containment",
       "source": "agent_playbook",
       "summary": "Remediation checklist: Disable the svc_deploy account and revoke all its active sessions/tokens. | Rotate and purge API key AKIA-DEPLOY-7Q2; remove it from git history; enable CI secret scanning. | Revoke the unauthorized admin role grant; gate /api/admin/* behind authz + approval. | Block egress to 192.0.2.50 at fw-edge-01; add DLP + rate caps on /api/export/*. | Enable lockout + MFA + rate-limiting on /api/login to stop credential stuffing. | Quantify exfiltrated customer records and start breach-notification process. | Add a saved correlation search for (login 401 burst -> 200) and (bulk export -> egress spike).",
@@ -246,7 +244,7 @@
     {
       "evidence_id": "SPLK-incident-01-20260610-010",
       "case_id": "incident-01",
-      "event_time_utc": "2026-06-10T02:31:00Z",
+      "event_time_utc": "2026-06-10T02:25:00Z",
       "event_type": "verification",
       "source": "ground_truth.json",
       "summary": "Validated findings against synthetic ground truth: 4/4 techniques matched, recall=1.0, precision=1.0, decoy_rejected=True, blast_radius_hosts_correct=True.",

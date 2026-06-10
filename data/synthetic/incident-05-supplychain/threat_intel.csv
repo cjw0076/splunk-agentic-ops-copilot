@@ -1,0 +1,4 @@
+row,indicator,type,verdict,note
+1,203.0.113.91,ipv4,malicious,Dependency-confusion exfil endpoint seen in npm supply-chain attacks
+2,colour-picker,package,malicious,Typosquat of color-picker; ships a postinstall data-stealer
+3,webpack,package,benign,Legitimate bundler; 5.92.0 is an official release

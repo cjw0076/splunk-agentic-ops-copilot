@@ -1,0 +1,54 @@
+{
+  "case_id": "incident-05-supplychain",
+  "title": "Supply-chain: poisoned dependency -> secret theft -> build-host C2",
+  "attack_class": "supply_chain",
+  "anomaly": {
+    "trigger_time_utc": "2026-06-13T07:54:20Z",
+    "summary": "Anomaly trigger: anomalous outbound connections from a build host that should only receive inbound traffic",
+    "spl": "index=network sourcetype=pan:traffic action=allow | where like(src_host,\"build-%\") | stats sum(bytes_out) as out_bytes by src_host,dest_ip"
+  },
+  "decoy_hypothesis": {
+    "id": "H1",
+    "confidence": 0.45,
+    "statement": "H1: The webpack 5.92.0 bump broke the build ({bf_count} failed tests) — that dependency change is the malicious supply-chain compromise.",
+    "seed_spl": "index=cicd sourcetype=ci:build event=build_test_failed | stats count by package | rename package as src_ip | sort -count",
+    "seed_ip_field": "src_ip",
+    "seed_count_field": "count"
+  },
+  "refutation": {
+    "success_check_spl": "index=cicd sourcetype=ci:build event=dependency_install package={bf_ip} | where like(script_hook,\"%postinstall%\")",
+    "threat_lookup_indicator": "{bf_ip}",
+    "no_success_reason": "webpack ran no install-time scripts and triggered no outbound traffic; a failing unit test is not a compromise",
+    "benign_reason": "threat intel rates {bf_ip} benign ({ti_note})"
+  },
+  "corrected_hypothesis": {
+    "id": "H2",
+    "confidence": 0.94,
+    "statement": "H2: The real compromise is a typosquatted dependency, colour-picker@3.1.9, whose postinstall hook ran a remote shell, read CI secrets (NPM_TOKEN, AWS_SECRET_ACCESS_KEY, GH_PAT), and exfiltrated them from build-runner-09 to a malicious endpoint (203.0.113.91) — webpack's failing tests were a benign red herring.",
+    "corroborating_spl": [
+      "index=cicd sourcetype=ci:build event=dependency_install | where like(script_hook,\"%postinstall%\") | table host,package,version,script_hook",
+      "index=network sourcetype=pan:traffic action=allow | where like(src_host,\"build-%\") | stats sum(bytes_out) as out_bytes values(dest_ip) as dests by src_host"
+    ],
+    "rationale": "SPL shows colour-picker's postinstall hook, a CI env-secret dump, and an outbound beacon from the build host to a malicious-rated IP — a corroborated supply-chain compromise."
+  },
+  "root_cause": "A typosquatted npm dependency (colour-picker@3.1.9, impersonating color-picker) executed a postinstall hook on build-runner-09 that read the CI pipeline's secrets and exfiltrated them to a malicious endpoint, then beaconed outbound for command-and-control.",
+  "blast_radius": {
+    "host_queries": [
+      "index=network sourcetype=pan:traffic action=allow | where like(src_host,\"build-%\") | stats count by src_host | rename src_host as host"
+    ],
+    "identity_query": "index=cicd sourcetype=ci:build event=env_dump | dedup package | table package",
+    "identity_field": "package",
+    "data_assets": ["NPM_TOKEN", "AWS_SECRET_ACCESS_KEY", "GH_PAT"],
+    "exfil_rule_id": "SC-C2-041",
+    "exfil_detail_key": "host"
+  },
+  "iocs": ["203.0.113.91", "colour-picker@3.1.9", "build-runner-09"],
+  "remediation": [
+    "Quarantine build-runner-09 and treat all secrets it could read (NPM_TOKEN, AWS_SECRET_ACCESS_KEY, GH_PAT) as compromised — rotate them now.",
+    "Block egress to 203.0.113.91 and deny outbound by default from build runners.",
+    "Remove colour-picker; pin and hash-verify dependencies; enable an allowlist + provenance (SLSA) for the registry.",
+    "Rebuild and re-sign artifacts from a clean ephemeral runner; revoke the unverified published bundle.",
+    "Add CI detections for (install-time postinstall hooks) and (outbound connections from build hosts).",
+    "Audit downstream consumers of the published artifact for the injected bundle chunk."
+  ]
+}

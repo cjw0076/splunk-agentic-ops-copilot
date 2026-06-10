@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Splunk Incident Copilot</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#141925; --panel2:#1b2233; --line:#2a3346;
+    --txt:#e6edf3; --dim:#8b97ab; --accent:#65d1ff; --green:#39d98a;
+    --amber:#ffce5c; --red:#ff6b6b; --purple:#b692ff; --mono:'SFMono-Regular',Consolas,'Liberation Mono',monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif}
+  header{display:flex;align-items:center;gap:14px;padding:14px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(90deg,#10151f,#0b0e14)}
+  header h1{font-size:17px;margin:0;font-weight:650;letter-spacing:.2px}
+  header .tag{font-size:11px;color:#0b0e14;background:var(--green);padding:2px 8px;border-radius:10px;font-weight:700}
+  header .sub{color:var(--dim);font-size:12px}
+  .wrap{display:grid;grid-template-columns:300px 1fr;gap:0;height:calc(100vh - 56px)}
+  aside{border-right:1px solid var(--line);background:var(--panel);overflow-y:auto;padding:14px}
+  aside h2{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--dim);margin:6px 4px 10px}
+  .scn{padding:11px 12px;border:1px solid var(--line);border-radius:9px;margin-bottom:9px;cursor:pointer;
+    background:var(--panel2);transition:.12s}
+  .scn:hover{border-color:var(--accent)}
+  .scn.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+  .scn .t{font-weight:600;font-size:13px}
+  .scn .c{color:var(--dim);font-size:11px;margin-top:3px;font-family:var(--mono)}
+  main{overflow-y:auto;padding:20px 26px}
+  .run-row{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+  button.run{background:var(--accent);color:#04121c;border:0;border-radius:8px;padding:9px 18px;font-weight:700;cursor:pointer;font-size:13px}
+  button.run:disabled{opacity:.5;cursor:wait}
+  .speed{color:var(--dim);font-size:12px}
+  .speed select{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:3px 6px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:16px;
+    opacity:0;transform:translateY(8px);transition:.35s}
+  .panel.show{opacity:1;transform:none}
+  .panel h3{margin:0 0 12px;font-size:13px;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);
+    display:flex;align-items:center;gap:8px}
+  .panel h3 .n{background:var(--panel2);color:var(--dim);border:1px solid var(--line);border-radius:20px;
+    width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:11px}
+  .spl{font-family:var(--mono);font-size:12.5px;background:#0a0d13;border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:6px;padding:9px 11px;color:#cfe8ff;white-space:pre-wrap;word-break:break-word;margin:6px 0}
+  .muted{color:var(--dim)}
+  .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;font-family:var(--mono)}
+  .sev-critical{background:#3a1418;color:var(--red);border:1px solid #5a1c22}
+  .sev-high{background:#3a2a12;color:var(--amber);border:1px solid #5a4118}
+  .sev-medium{background:#13283a;color:var(--accent);border:1px solid #1b3d5a}
+  .mitre{background:#231a3a;color:var(--purple);border:1px solid #36285a}
+  table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px;font-family:var(--mono)}
+  th,td{border:1px solid var(--line);padding:5px 8px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:var(--dim);font-weight:600;position:sticky;top:0}
+  td{color:#d6deea}
+  .tablewrap{max-height:260px;overflow:auto;border-radius:6px;border:1px solid var(--line)}
+  .hyp{border-left:3px solid var(--amber);padding:8px 12px;background:#1a1710;border-radius:6px;margin:6px 0}
+  .contra{border-left:3px solid var(--red);padding:8px 12px;background:#1d1212;border-radius:6px;margin:6px 0}
+  .correct{border-left:3px solid var(--green);padding:8px 12px;background:#0f1d16;border-radius:6px;margin:6px 0}
+  .ev{font-family:var(--mono);font-size:11px;color:var(--accent)}
+  .step{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}
+  .step:last-child{border-bottom:0}
+  .step .ix{flex:0 0 26px;color:var(--dim);font-family:var(--mono);font-size:12px}
+  .step .k{flex:0 0 110px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+  .k-tool_call{color:var(--accent)} .k-hypothesis{color:var(--amber)}
+  .k-contradiction{color:var(--red)} .k-self_correction{color:var(--green)}
+  .k-finding{color:var(--purple)} .k-note{color:var(--dim)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .kv{display:flex;gap:8px;margin:4px 0}.kv b{flex:0 0 130px;color:var(--dim);font-weight:600}
+  .chip{display:inline-block;background:var(--panel2);border:1px solid var(--line);border-radius:6px;
+    padding:3px 9px;margin:3px 5px 0 0;font-family:var(--mono);font-size:12px}
+  .check{display:flex;gap:9px;align-items:flex-start;padding:6px 0}
+  .check .box{flex:0 0 16px;height:16px;border:1.5px solid var(--green);border-radius:4px;margin-top:2px}
+  .scorecard{display:flex;gap:18px;flex-wrap:wrap}
+  .score{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 16px;min-width:120px}
+  .score .v{font-size:22px;font-weight:750}.score .l{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.08em}
+  .ok{color:var(--green)} .bad{color:var(--red)}
+  .finding{border:1px solid var(--line);border-radius:9px;padding:12px;margin-bottom:10px;background:var(--panel2)}
+  .finding .top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+  .blast .node{display:inline-block;border:1px solid var(--line);border-radius:8px;padding:7px 12px;margin:4px;background:var(--panel2);font-family:var(--mono);font-size:12px}
+  .blast .lbl{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.08em;margin:8px 0 2px}
+  a.ref{color:var(--accent);text-decoration:none;border-bottom:1px dotted var(--accent)}
+  .spinner{display:inline-block;width:13px;height:13px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  footer{color:var(--dim);font-size:11px;padding:10px 0 40px;text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <h1>Splunk Incident Copilot</h1>
+  <span class="tag">SYNTHETIC · OFFLINE</span>
+  <span class="sub">agentic investigation · real SPL · evidence-linked · self-correcting</span>
+</header>
+<div class="wrap">
+  <aside>
+    <h2>Scenarios</h2>
+    <div id="scnList"></div>
+    <h2 style="margin-top:18px">About</h2>
+    <p class="muted" style="font-size:12px">Every query below is real SPL executed
+    against synthetic Splunk events — no mocks, no credentials. The same agent
+    solves all five incidents and self-corrects away from a planted decoy.</p>
+  </aside>
+  <main id="main">
+    <div class="run-row">
+      <button class="run" id="runBtn" disabled>Select a scenario</button>
+      <span class="speed">replay&nbsp;
+        <select id="speed">
+          <option value="650">normal</option>
+          <option value="250">fast</option>
+          <option value="0">instant</option>
+        </select>
+      </span>
+      <span id="status" class="muted"></span>
+    </div>
+    <div id="panels"></div>
+    <footer>Splunk Agentic Ops — Incident Copilot · synthetic by default, live-Splunk ready (set SPLUNK_URL + SPLUNK_TOKEN).</footer>
+  </main>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+let current = null, running = false;
+
+async function loadScenarios(){
+  const r = await fetch('/api/scenarios'); const d = await r.json();
+  const list = $('#scnList'); list.innerHTML='';
+  d.scenarios.forEach((s,i)=>{
+    const el = document.createElement('div'); el.className='scn'; el.dataset.id=s.id;
+    el.innerHTML = `<div class="t">${s.title}</div><div class="c">${s.id} · ${s.attack_class}</div>`;
+    el.onclick = ()=>selectScenario(s.id, el);
+    list.appendChild(el);
+    if(i===0) selectScenario(s.id, el);
+  });
+}
+function selectScenario(id, el){
+  if(running) return;
+  current = id;
+  document.querySelectorAll('.scn').forEach(x=>x.classList.remove('active'));
+  el.classList.add('active');
+  const b = $('#runBtn'); b.disabled=false; b.textContent='▶ Run investigation';
+  $('#panels').innerHTML=''; $('#status').textContent='';
+}
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+function panel(n,title){
+  const p = document.createElement('div'); p.className='panel';
+  p.innerHTML = `<h3><span class="n">${n}</span>${title}</h3><div class="body"></div>`;
+  $('#panels').appendChild(p);
+  requestAnimationFrame(()=>p.classList.add('show'));
+  p.scrollIntoView({behavior:'smooth',block:'end'});
+  return p.querySelector('.body');
+}
+function esc(s){return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function refLinks(refs){return (refs||[]).map(r=>`<span class="ev">${esc(r)}</span>`).join(' ');}
+function table(cols, rows){
+  if(!rows||!rows.length) return '<div class="muted">0 rows</div>';
+  const showCols = cols.filter(c=>c!=='_evidence').slice(0,8);
+  let h='<div class="tablewrap"><table><thead><tr>'+showCols.map(c=>`<th>${esc(c)}</th>`).join('')+'<th>evidence</th></tr></thead><tbody>';
+  rows.forEach(r=>{ h+='<tr>'+showCols.map(c=>`<td>${esc(r[c])}</td>`).join('')+`<td class="ev">${(r._evidence||[]).slice(0,3).join(' ')}</td></tr>`; });
+  return h+'</tbody></table></div>';
+}
+
+async function run(){
+  if(!current||running) return;
+  running=true; const b=$('#runBtn'); b.disabled=true; b.textContent='investigating…';
+  $('#panels').innerHTML=''; $('#status').innerHTML='<span class="spinner"></span> running agent';
+  const speed = +$('#speed').value;
+  const r = await fetch('/api/investigate/'+current); const d = await r.json();
+
+  // 1. anomaly trigger
+  let body = panel(1,'Anomaly trigger');
+  body.innerHTML = `<div>${esc(d.anomaly.summary)}</div>
+    <div class="muted" style="font-size:12px;margin-top:4px">${esc(d.anomaly.time_utc)} · ${d.event_count} events across ${Object.keys(d.sourcetypes).length} sourcetypes</div>
+    <div class="spl">${esc(d.anomaly.spl)}</div>
+    <div>${Object.entries(d.sourcetypes).map(([k,v])=>`<span class="chip">${esc(k)} · ${v}</span>`).join('')}</div>`;
+  await sleep(speed);
+
+  // 2. reasoning + live SPL searches (streamed from the timeline)
+  body = panel(2,'Agentic reasoning &amp; live SPL');
+  for(const s of d.timeline){
+    let node=document.createElement('div');
+    if(s.kind==='hypothesis'){
+      node.className='hyp';
+      node.innerHTML=`<b>Hypothesis ${esc(s.hypothesis_id)}</b> <span class="muted">(confidence ${s.confidence})</span><br>${esc(s.statement)}`;
+    } else if(s.kind==='contradiction'){
+      node.className='contra';
+      node.innerHTML=`<b>⚠ Contradiction on ${esc(s.hypothesis_id)}</b><br>${esc(s.reason)}<br><span class="muted">evidence:</span> ${refLinks(s.evidence_refs)}`;
+    } else if(s.kind==='self_correction'){
+      node.className='correct';
+      node.innerHTML=`<b>✓ Self-correction (${esc(s.from_hypothesis)} → new)</b><br>${esc(s.to_statement)}<br><span class="muted" style="font-size:12px">${esc(s.rationale)}</span>`;
+    } else if(s.kind==='tool_call' && s.spl){
+      node.innerHTML=`<div class="spl">${esc(s.spl)}</div>
+        <div class="muted" style="font-size:12px;margin:-2px 0 4px">→ ${s.result_count} result row(s)</div>
+        ${table(s.columns, s.rows)}`;
+    } else { continue; }
+    body.appendChild(node);
+    body.parentElement.scrollIntoView({behavior:'smooth',block:'end'});
+    if(speed) await sleep(s.kind==='tool_call'?Math.max(120,speed*0.5):speed);
+  }
+
+  // 3. MITRE-mapped findings
+  body = panel(3,'MITRE-mapped findings (evidence-linked)');
+  d.findings.forEach(f=>{
+    const sev = `sev-${f.severity}`;
+    body.insertAdjacentHTML('beforeend',`<div class="finding">
+      <div class="top">
+        <span class="pill ${sev}">${f.severity.toUpperCase()}</span>
+        ${f.mitre!=='-'?`<span class="pill mitre">${esc(f.mitre)}</span>`:''}
+        <span class="pill" style="border:1px solid var(--line);color:var(--dim)">${esc(f.ops_class)}</span>
+        <b>${esc(f.label)}</b> <span class="muted">${esc(f.rule_id)}</span>
+      </div>
+      <div>${esc(f.summary)}</div>
+      <div class="spl">${esc(f.spl)}</div>
+      <div style="font-size:12px"><span class="muted">evidence:</span> ${refLinks(f.evidence_refs)}</div>
+      ${f.iocs&&f.iocs.length?`<div style="font-size:12px;margin-top:4px"><span class="muted">IOCs:</span> ${f.iocs.map(i=>`<span class="chip">${esc(i)}</span>`).join('')}</div>`:''}
+    </div>`);
+  });
+  await sleep(speed);
+
+  // 4. root cause + blast radius
+  body = panel(4,'Root cause &amp; blast radius');
+  const br=d.blast_radius;
+  body.innerHTML = `<div class="grid2">
+    <div><b>Root cause</b><p>${esc(d.root_cause)}</p>
+      <div style="font-size:12px"><span class="muted">IOCs:</span> ${d.iocs.map(i=>`<span class="chip">${esc(i)}</span>`).join('')}</div></div>
+    <div class="blast">
+      <div class="lbl">Affected hosts</div>${(br.hosts||[]).map(h=>`<span class="node">🖥 ${esc(h)}</span>`).join('')||'<span class="muted">none</span>'}
+      <div class="lbl">Compromised identities</div>${(br.identities||[]).map(h=>`<span class="node">👤 ${esc(h)}</span>`).join('')||'<span class="muted">none</span>'}
+      <div class="lbl">Data assets at risk</div>${(br.data_assets||[]).map(h=>`<span class="node">🗄 ${esc(h)}</span>`).join('')||'<span class="muted">none</span>'}
+    </div></div>`;
+  await sleep(speed);
+
+  // 5. remediation
+  body = panel(5,'Remediation checklist (recommendation-only)');
+  body.innerHTML = d.remediation.map(x=>`<div class="check"><div class="box"></div><div>${esc(x)}</div></div>`).join('');
+  await sleep(speed);
+
+  // 6. accuracy scorecard
+  body = panel(6,'Accuracy self-check (vs synthetic ground truth)');
+  const a=d.accuracy;
+  body.innerHTML = `<div class="scorecard">
+    <div class="score"><div class="v ${a.recall===1?'ok':''}">${a.recall}</div><div class="l">recall</div></div>
+    <div class="score"><div class="v ${a.precision===1?'ok':''}">${a.precision}</div><div class="l">precision</div></div>
+    <div class="score"><div class="v ${a.decoy_rejected?'ok':'bad'}">${a.decoy_rejected?'YES':'NO'}</div><div class="l">decoy rejected</div></div>
+    <div class="score"><div class="v">${a.detected_techniques.length}/${a.expected_techniques}</div><div class="l">MITRE matched</div></div>
+    <div class="score"><div class="v ${a.blast_radius_hosts_correct?'ok':'bad'}">${a.blast_radius_hosts_correct?'✓':'✗'}</div><div class="l">blast hosts</div></div>
+    <div class="score"><div class="v ${a.blast_radius_identities_correct?'ok':'bad'}">${a.blast_radius_identities_correct?'✓':'✗'}</div><div class="l">blast ids</div></div>
+  </div>
+  <div style="margin-top:10px;font-size:12px">techniques: ${a.detected_techniques.map(t=>`<span class="pill mitre">${esc(t)}</span>`).join(' ')}</div>`;
+  await sleep(speed);
+
+  // 7. replay timeline
+  body = panel(7,`Replayable trace (${d.trace_steps} steps · ${d.ledger_records} ledger records)`);
+  d.timeline.forEach(s=>{
+    let desc='';
+    if(s.kind==='tool_call'&&s.spl) desc=`<span class="muted">${esc(s.spl)}</span> → ${s.result_count} rows`;
+    else if(s.kind==='hypothesis') desc=`${esc(s.hypothesis_id)} (${s.confidence}): ${esc(s.statement).slice(0,90)}…`;
+    else if(s.kind==='contradiction') desc=esc(s.reason);
+    else if(s.kind==='self_correction') desc=`→ ${esc(s.to_statement).slice(0,90)}…`;
+    else if(s.kind==='finding') desc=`${esc(s.evidence_id)} ${esc(s.label)}`;
+    else if(s.kind==='note') desc=esc(s.text);
+    body.insertAdjacentHTML('beforeend',`<div class="step"><div class="ix">${s.step}</div><div class="k k-${s.kind}">${s.kind}</div><div style="flex:1">${desc}</div></div>`);
+  });
+
+  $('#status').innerHTML = `<span class="ok">✓ done</span> · recall ${a.recall} · precision ${a.precision} · decoy rejected`;
+  running=false; b.disabled=false; b.textContent='↻ Re-run investigation';
+}
+$('#runBtn').onclick = run;
+loadScenarios();
+</script>
+</body>
+</html>

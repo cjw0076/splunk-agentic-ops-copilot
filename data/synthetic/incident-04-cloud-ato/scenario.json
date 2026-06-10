@@ -1,0 +1,52 @@
+{
+  "case_id": "incident-04-cloud-ato",
+  "title": "Cloud account takeover: MFA-fatigue -> impossible travel -> OAuth persistence",
+  "attack_class": "account_takeover",
+  "anomaly": {
+    "trigger_time_utc": "2026-06-13T05:21:00Z",
+    "summary": "Anomaly trigger: a burst of denied MFA push challenges followed by a successful SSO login for the same user",
+    "spl": "index=saas sourcetype=okta:authentication result=MFA_DENIED | stats count by user,src_ip"
+  },
+  "decoy_hypothesis": {
+    "id": "H1",
+    "confidence": 0.45,
+    "statement": "H1: User {bf_ip} logged in from two countries minutes apart — that is the impossible-travel account takeover.",
+    "seed_spl": "index=saas sourcetype=okta:authentication action=success user=s.muller | stats dc(geo_country) as count by user | rename user as src_ip",
+    "seed_ip_field": "src_ip",
+    "seed_count_field": "count"
+  },
+  "refutation": {
+    "success_check_spl": "index=saas sourcetype=okta:authentication action=success user=s.muller | lookup threat_intel.csv indicator as src_ip OUTPUT verdict | where verdict!=\"benign\"",
+    "threat_lookup_indicator": "203.0.113.200",
+    "no_success_reason": "every source IP for s.muller is sanctioned corporate VPN egress (US and EU egress of the same VPN), not attacker infrastructure",
+    "benign_reason": "threat intel rates those egress IPs benign ({ti_note})"
+  },
+  "corrected_hypothesis": {
+    "id": "H2",
+    "confidence": 0.94,
+    "statement": "H2: The real account takeover is d.okafor: after an MFA-fatigue push-bombing burst from a malicious residential proxy in Lagos (102.89.40.7), the attacker authenticated, consented a malicious OAuth app (MailRuleSyncer) with mail.send + offline_access for persistence, created an inbox-hiding rule, and pulled a finance board deck — s.muller's US/EU VPN hops are sanctioned, not travel.",
+    "corroborating_spl": [
+      "index=saas sourcetype=okta:authentication action=success user=d.okafor | table user,geo_country,src_ip",
+      "index=saas sourcetype=okta:system event=app.oauth2.client.consent.grant | table user,oauth_app,scopes,src_ip"
+    ],
+    "rationale": "SPL shows d.okafor's success from a malicious-rated Lagos proxy plus a malicious OAuth grant and an inbox rule — a corroborated takeover chain, while s.muller's geo change is benign VPN egress."
+  },
+  "root_cause": "An attacker used MFA push-fatigue from a malicious residential proxy to take over d.okafor's SSO account, then consented a malicious OAuth application (MailRuleSyncer) with mail and offline_access scopes to establish token persistence and created a mailbox rule to hide its activity.",
+  "blast_radius": {
+    "host_queries": [],
+    "identity_query": "index=saas sourcetype=okta:system event=app.oauth2.client.consent.grant | dedup user | table user",
+    "identity_field": "user",
+    "data_assets": ["mailbox", "finance_documents"],
+    "exfil_rule_id": "ATO-OAUTH-011",
+    "exfil_detail_key": "oauth_app"
+  },
+  "iocs": ["102.89.40.7", "MailRuleSyncer", "d.okafor"],
+  "remediation": [
+    "Force a password reset AND revoke all active sessions and refresh tokens for d.okafor.",
+    "Revoke the MailRuleSyncer OAuth grant and block the app tenant-wide; require admin approval for third-party apps.",
+    "Delete the malicious inbox rule and review for further mailbox manipulation / forwarding.",
+    "Block the malicious proxy 102.89.40.7 and add a detection for MFA-denied bursts preceding a success.",
+    "Switch the affected group from push to number-matching or FIDO2 MFA to defeat push fatigue.",
+    "Notify d.okafor and audit what the finance board deck exposure requires."
+  ]
+}

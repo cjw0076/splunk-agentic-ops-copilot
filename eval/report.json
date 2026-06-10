@@ -1,0 +1,135 @@
+{
+  "schema": "splunk_copilot_eval/1.0",
+  "synthetic": true,
+  "aggregate": {
+    "scenarios": 5,
+    "macro_recall": 1.0,
+    "macro_precision": 1.0,
+    "decoy_rejection_rate": 1.0,
+    "blast_radius_hosts_accuracy": 1.0,
+    "blast_radius_identities_accuracy": 1.0,
+    "mean_mttr_steps": 5.0,
+    "distinct_mitre_techniques": [
+      "T1068",
+      "T1071.001",
+      "T1078",
+      "T1078.004",
+      "T1098.001",
+      "T1110.004",
+      "T1195.001",
+      "T1486",
+      "T1490",
+      "T1530",
+      "T1567.002"
+    ],
+    "distinct_mitre_count": 11
+  },
+  "scenarios": [
+    {
+      "case_id": "incident-01",
+      "title": "Web credential-stuffing -> leaked key -> privilege escalation -> exfiltration",
+      "attack_class": "external_breach",
+      "recall": 1.0,
+      "precision": 1.0,
+      "decoy_rejected": true,
+      "expected_techniques": 4,
+      "detected_techniques": [
+        "T1068",
+        "T1078.004",
+        "T1110.004",
+        "T1567.002"
+      ],
+      "mitre_coverage": "4/4",
+      "mttr_steps": 5,
+      "total_searches": 24,
+      "blast_radius_hosts_correct": true,
+      "blast_radius_identities_correct": true,
+      "detections": 5,
+      "ledger_records": 10,
+      "trace_steps": 37
+    },
+    {
+      "case_id": "incident-02-ransomware",
+      "title": "Ransomware: shadow-copy deletion -> mass encryption -> C2",
+      "attack_class": "ransomware",
+      "recall": 1.0,
+      "precision": 1.0,
+      "decoy_rejected": true,
+      "expected_techniques": 2,
+      "detected_techniques": [
+        "T1486",
+        "T1490"
+      ],
+      "mitre_coverage": "2/2",
+      "mttr_steps": 5,
+      "total_searches": 20,
+      "blast_radius_hosts_correct": true,
+      "blast_radius_identities_correct": true,
+      "detections": 3,
+      "ledger_records": 8,
+      "trace_steps": 31
+    },
+    {
+      "case_id": "incident-03-insider",
+      "title": "Insider data theft: after-hours bulk export by a privileged DBA",
+      "attack_class": "insider_threat",
+      "recall": 1.0,
+      "precision": 1.0,
+      "decoy_rejected": true,
+      "expected_techniques": 1,
+      "detected_techniques": [
+        "T1530"
+      ],
+      "mitre_coverage": "1/1",
+      "mttr_steps": 5,
+      "total_searches": 20,
+      "blast_radius_hosts_correct": true,
+      "blast_radius_identities_correct": true,
+      "detections": 1,
+      "ledger_records": 6,
+      "trace_steps": 29
+    },
+    {
+      "case_id": "incident-04-cloud-ato",
+      "title": "Cloud account takeover: MFA-fatigue -> impossible travel -> OAuth persistence",
+      "attack_class": "account_takeover",
+      "recall": 1.0,
+      "precision": 1.0,
+      "decoy_rejected": true,
+      "expected_techniques": 2,
+      "detected_techniques": [
+        "T1078",
+        "T1098.001"
+      ],
+      "mitre_coverage": "2/2",
+      "mttr_steps": 5,
+      "total_searches": 19,
+      "blast_radius_hosts_correct": true,
+      "blast_radius_identities_correct": true,
+      "detections": 2,
+      "ledger_records": 7,
+      "trace_steps": 29
+    },
+    {
+      "case_id": "incident-05-supplychain",
+      "title": "Supply-chain: poisoned dependency -> secret theft -> build-host C2",
+      "attack_class": "supply_chain",
+      "recall": 1.0,
+      "precision": 1.0,
+      "decoy_rejected": true,
+      "expected_techniques": 2,
+      "detected_techniques": [
+        "T1071.001",
+        "T1195.001"
+      ],
+      "mitre_coverage": "2/2",
+      "mttr_steps": 5,
+      "total_searches": 19,
+      "blast_radius_hosts_correct": true,
+      "blast_radius_identities_correct": true,
+      "detections": 3,
+      "ledger_records": 8,
+      "trace_steps": 30
+    }
+  ]
+}

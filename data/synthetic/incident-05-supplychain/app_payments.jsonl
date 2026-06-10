@@ -1,0 +1,1 @@
+{"row": 1, "index": "app", "sourcetype": "app:payments", "host": "build-runner-09", "_time": 1749800200, "time_utc": "2025-06-13T07:36:40Z", "level": "ERROR", "event": "artifact_signed", "user": "ci-bot", "msg": "Artifact web-frontend@1.9.4 published with unexpected extra bundle chunk (unverified)"}

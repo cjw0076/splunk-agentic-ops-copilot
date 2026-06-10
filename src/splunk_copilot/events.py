@@ -34,14 +34,11 @@ class Event:
         return self.data.get(key, default)
 
 
-# JSONL files are the Splunk events; CSVs are lookups (e.g. threat intel).
-_EVENT_FILES = (
-    "web_access.jsonl",
-    "linux_secure.jsonl",
-    "app_payments.jsonl",
-    "fw_traffic.jsonl",
-)
-_LOOKUP_FILES = ("threat_intel.csv",)
+# Every ``*.jsonl`` in a case dir is a Splunk event stream; every ``*.csv`` is a
+# lookup table (e.g. threat intel). The loader auto-discovers them so adding a
+# new sourcetype to a scenario is just dropping in a new .jsonl — no code change.
+# ``ground_truth.json`` / ``scenario.json`` are manifests, not events.
+_NON_DATA_JSON = {"ground_truth.json", "scenario.json"}
 
 
 @dataclass
@@ -53,10 +50,11 @@ class EventStore:
     lookups: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
 
     def load(self) -> None:
-        for fname in _EVENT_FILES:
-            path = os.path.join(self.case_dir, fname)
-            if not os.path.exists(path):
+        names = sorted(os.listdir(self.case_dir)) if os.path.isdir(self.case_dir) else []
+        for fname in names:
+            if not fname.endswith(".jsonl"):
                 continue
+            path = os.path.join(self.case_dir, fname)
             with open(path, encoding="utf-8") as fh:
                 for line in fh:
                     line = line.strip()
@@ -74,13 +72,15 @@ class EventStore:
                             data=obj,
                         )
                     )
-        for fname in _LOOKUP_FILES:
-            path = os.path.join(self.case_dir, fname)
-            if not os.path.exists(path):
-                self.lookups[fname] = []
+        # stable global ordering by _time keeps streamstats/transaction sane
+        self.events.sort(key=lambda e: (float(e.get("_time", 0) or 0), e.source_file, e.row))
+        for fname in names:
+            if not fname.endswith(".csv"):
                 continue
+            path = os.path.join(self.case_dir, fname)
             with open(path, encoding="utf-8", newline="") as fh:
                 self.lookups[fname] = [dict(r) for r in csv.DictReader(fh)]
+        self.lookups.setdefault("threat_intel.csv", [])
 
     # ---- typed read-only lookup "tool" ------------------------------------
 

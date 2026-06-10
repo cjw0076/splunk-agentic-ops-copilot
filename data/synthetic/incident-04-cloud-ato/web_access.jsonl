@@ -1,0 +1,1 @@
+{"row": 1, "index": "web", "sourcetype": "access_combined", "host": "portal-01", "_time": 1749791100, "time_utc": "2025-06-13T05:05:00Z", "clientip": "102.89.40.7", "method": "GET", "uri_path": "/files/finance/Q2_board_deck.pdf", "status": 200, "bytes": 2400000, "user": "d.okafor", "useragent": "Mozilla/5.0"}

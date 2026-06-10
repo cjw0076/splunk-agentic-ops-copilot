@@ -1,0 +1,23 @@
+{
+  "case_id": "incident-03-insider",
+  "synthetic": true,
+  "narrative": "Privileged DBA j.kwon logged into SSO after hours from a BYOD laptop (okta_auth.jsonl:1), then ran three unapproved bulk exports against db-prod-01 — customers, payment_methods, and salaries (db_audit.jsonl:2-4) — totaling ~97,870 sensitive records. Their workstation DBA-WS-03 then uploaded ~30MB to an unsanctioned personal cloud-storage endpoint at 198.51.100.44 (fw_traffic.jsonl:1-3). Blast radius: db-prod-01, the j.kwon identity, and the customers / payment_methods / salaries datasets.",
+  "decoy": "The scheduled ETL service account svc_etl_nightly exported 500,000 rows of the orders table (db_audit.jsonl:1) — far more volume than the insider. Ranking by row count alone points here, but that job ran during business hours, was approved/whitelisted, and the account is rated benign in threat_intel.csv:1. A correct agent must NOT attribute the theft to the high-volume ETL job and must self-correct to j.kwon's after-hours, unapproved exports.",
+  "root_cause": "A privileged DBA abused legitimate access for after-hours, unapproved bulk exports of sensitive tables and uploaded them to an unsanctioned personal cloud endpoint.",
+  "expected_findings": [
+    {"id": "GT-1", "mitre": "T1530", "ops_class": "insider_exfiltration", "label": "After-hours bulk data export by a privileged user", "key_evidence": ["db_audit.jsonl:2", "db_audit.jsonl:3"]}
+  ],
+  "expected_decoy_rejections": [
+    {"id": "GT-D1", "claim": "The svc_etl_nightly job (500K rows) is the data-theft culprit because it moved the most data", "must_reject_because": "that export ran during business hours, was approved/whitelisted, and the account is benign (threat_intel.csv:1); volume alone is not exfiltration"}
+  ],
+  "blast_radius": {
+    "hosts": ["db-prod-01"],
+    "identities": ["j.kwon"],
+    "data_assets": ["customers", "payment_methods", "salaries"]
+  },
+  "iocs": [
+    {"indicator": "j.kwon", "type": "account"},
+    {"indicator": "198.51.100.44", "type": "ipv4"},
+    {"indicator": "DBA-WS-03", "type": "host"}
+  ]
+}

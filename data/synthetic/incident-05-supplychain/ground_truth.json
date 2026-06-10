@@ -1,0 +1,24 @@
+{
+  "case_id": "incident-05-supplychain",
+  "synthetic": true,
+  "narrative": "The web-frontend pipeline on build-runner-09 installed a typosquatted dependency, colour-picker@3.1.9, whose postinstall hook ran a remote shell (ci_build.jsonl:5) and read the CI pipeline secrets NPM_TOKEN, AWS_SECRET_ACCESS_KEY and GH_PAT (ci_build.jsonl:6). The build host — which should only receive inbound traffic — then beaconed outbound to a malicious endpoint at 203.0.113.91 four times (fw_traffic.jsonl:2-5), and a published artifact carried an unexpected extra bundle chunk (app_payments.jsonl:1). Blast radius: build-runner-09, the colour-picker dependency, and the three stolen CI secrets.",
+  "decoy": "A legitimate major version bump of webpack to 5.92.0 broke 12 unit tests (ci_build.jsonl:3-4), which looks like a malicious dependency change. But webpack 5.92.0 is an official release rated benign in threat_intel.csv:3, it ran no install-time scripts, and it caused no outbound traffic — a failing test is not a compromise. A correct agent must NOT attribute the supply-chain attack to webpack and must self-correct to colour-picker.",
+  "root_cause": "A typosquatted npm dependency executed a postinstall hook that stole CI secrets and exfiltrated them from the build host, which then beaconed for command-and-control.",
+  "expected_findings": [
+    {"id": "GT-1", "mitre": "T1195.001", "ops_class": "supply_chain_compromise", "label": "Poisoned dependency with postinstall hook on build host", "key_evidence": ["ci_build.jsonl:5", "ci_build.jsonl:6"]},
+    {"id": "GT-2", "mitre": "T1071.001", "ops_class": "command_and_control", "label": "Outbound C2 beacon from build host", "key_evidence": ["fw_traffic.jsonl:2", "fw_traffic.jsonl:3"]}
+  ],
+  "expected_decoy_rejections": [
+    {"id": "GT-D1", "claim": "The webpack 5.92.0 bump that failed 12 tests is the malicious supply-chain change", "must_reject_because": "webpack 5.92.0 is an official benign release (threat_intel.csv:3), ran no postinstall script, and caused no outbound traffic; a failing test is not a compromise"}
+  ],
+  "blast_radius": {
+    "hosts": ["build-runner-09"],
+    "identities": ["colour-picker"],
+    "data_assets": ["NPM_TOKEN", "AWS_SECRET_ACCESS_KEY", "GH_PAT"]
+  },
+  "iocs": [
+    {"indicator": "203.0.113.91", "type": "ipv4"},
+    {"indicator": "colour-picker@3.1.9", "type": "package"},
+    {"indicator": "build-runner-09", "type": "host"}
+  ]
+}

@@ -1,0 +1,4 @@
+row,indicator,type,verdict,note
+1,svc_etl_nightly,account,benign,Approved scheduled ETL service account; whitelisted bulk-export job
+2,198.51.100.44,ipv4,suspicious,Unsanctioned personal cloud-storage endpoint (not an approved data processor)
+3,j.kwon,account,unknown,Privileged DBA; no prior reputation

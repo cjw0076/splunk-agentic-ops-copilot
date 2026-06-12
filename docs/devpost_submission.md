@@ -111,6 +111,16 @@ PYTHONPATH=src python3 -m splunk_copilot \
   --spl 'index=web uri_path="/api/login" status=401 | stats count by clientip'
 ```
 
+## Devpost form fields
+
+- **Project name**: Splunk Agentic Ops — Incident Copilot
+- **Track**: Security
+- **Tagline**: An agentic incident-investigation copilot that forms hypotheses, runs real SPL, self-corrects when the obvious story is wrong, and produces evidence-cited root cause, blast radius, and remediation.
+- **Tags**: splunk, spl, agentic-ai, security, observability, incident-response, mitre-attack, self-correction, python
+- **Video URL**: https://github.com/cjw0076/splunk-agentic-ops-copilot/releases/download/demo-v1/splunk_copilot_demo.mp4
+- **Repo URL**: https://github.com/cjw0076/splunk-agentic-ops-copilot
+- **Architecture diagram**: `architecture_diagram.md`
+
 ## ~3-minute demo video — beats
 
 1. (0:00) One-liner: "an agent that investigates a Splunk incident, runs *real*

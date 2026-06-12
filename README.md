@@ -12,6 +12,18 @@
 - domain: observability, security, developer experience with Splunk AI
 - license: MIT (see `LICENSE`)
 
+## Devpost required components
+
+| Required component | Where judges can verify it |
+|---|---|
+| Track | Security |
+| Demo video under 3 minutes | [`splunk_copilot_demo.mp4`](https://github.com/cjw0076/splunk-agentic-ops-copilot/releases/download/demo-v1/splunk_copilot_demo.mp4) |
+| Public open-source repo | This GitHub repo, MIT license in `LICENSE` |
+| Setup and run instructions | [Run it](#run-it-stdlib-python-only-for-the-core) |
+| Dependencies/configs/datasets | `webapp/requirements.txt`, `data/synthetic/`, and examples below |
+| Architecture diagram at repo root | [`architecture_diagram.md`](architecture_diagram.md) |
+| Splunk interaction and AI integration | [How it maps to a real Splunk deployment](#how-it-maps-to-a-real-splunk-deployment) and the architecture diagram |
+
 ## What this is
 
 An **agentic incident-investigation copilot** that, on an anomaly trigger, drives
@@ -226,5 +238,5 @@ Records conform to `docs/agent_evidence_ledger_schema.json`. Each finding adds
   REST seam, **41/41 tests green** — all from real runs.
 - Why synthetic by default: a live Splunk trial signup is reCAPTCHA-gated and we
   have no live tenant. The REST seam means a `SPLUNK_TOKEN` is a one-line swap.
-- Founder-only gates (not done by the build agent): register on Devpost, publish
-  the public repo under MIT, record the demo video.
+- Public repo and demo video are published. Remaining external action is
+  Devpost form finalization.
